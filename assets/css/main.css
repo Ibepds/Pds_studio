@@ -1,0 +1,180 @@
+/* PDS Studio – thème global */
+:root {
+  --pds-bg: #0a0a0a;
+  --pds-card: #151515;
+  --pds-border: #222;
+  --pds-text: #e8e8e8;
+  --pds-muted: #9a9a9a;
+  --pds-muted2: #7a7a7a;
+  --pds-primary: #4a9eff;
+  --pds-primary-hover: #62b0ff;
+  --pds-primary-shadow: rgba(74, 158, 255, 0.25);
+  --pds-radius: 12px;
+  --pds-radius-lg: 16px;
+  --pds-input-padding: 14px;
+  --pds-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+body {
+  font-family: var(--pds-font);
+  background: var(--pds-bg);
+  color: var(--pds-text);
+  min-height: 100vh;
+}
+
+/* Bouton principal */
+.btn-primary {
+  background: linear-gradient(135deg, var(--pds-primary), var(--pds-primary-hover));
+  color: #fff;
+  border: none;
+  padding: 18px 40px;
+  font-size: 1.05rem;
+  border-radius: var(--pds-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  box-shadow: 0 8px 20px var(--pds-primary-shadow);
+}
+.btn-primary:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(74, 158, 255, 0.35);
+}
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Bouton secondaire */
+.btn-secondary {
+  background: transparent;
+  color: var(--pds-muted);
+  border: 1px solid #333;
+  padding: 14px 32px;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-weight: 400;
+}
+.btn-secondary:hover {
+  border-color: var(--pds-primary);
+  color: var(--pds-primary);
+}
+
+/* Cartes / blocs */
+.pds-card {
+  background: var(--pds-card);
+  border: 1px solid var(--pds-border);
+  border-radius: var(--pds-radius-lg);
+  padding: 30px;
+}
+
+/* Champs formulaire */
+.pds-input,
+.pds-select {
+  width: 100%;
+  background: var(--pds-card);
+  border: 1px solid var(--pds-border);
+  color: var(--pds-text);
+  padding: var(--pds-input-padding);
+  border-radius: 10px;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
+}
+.pds-input:focus,
+.pds-select:focus {
+  outline: none;
+  border-color: var(--pds-primary);
+}
+.pds-input::placeholder {
+  color: var(--pds-muted2);
+}
+
+.pds-label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  color: var(--pds-muted);
+}
+
+.form-group {
+  margin-bottom: 20px;
+}
+
+.price-line {
+  font-size: 1.2rem;
+  color: var(--pds-text);
+}
+
+.location-info {
+  font-size: 0.9rem;
+  color: var(--pds-muted2);
+  line-height: 1.6;
+}
+
+/* Options durée / créneaux */
+.pds-option {
+  background: var(--pds-card);
+  border: 2px solid var(--pds-border);
+  color: var(--pds-text);
+  padding: 20px;
+  border-radius: var(--pds-radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 1rem;
+  font-weight: 400;
+}
+.pds-option:hover {
+  border-color: var(--pds-primary);
+}
+.pds-option.selected {
+  background: var(--pds-primary);
+  border-color: var(--pds-primary);
+  color: #fff;
+  font-weight: 500;
+}
+
+/* Résumé réservation */
+.pds-summary {
+  background: var(--pds-card);
+  border-radius: var(--pds-radius-lg);
+  padding: 25px;
+  border: 1px solid var(--pds-primary);
+}
+.pds-summary-line {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 0.95rem;
+}
+.pds-summary-line strong {
+  color: var(--pds-primary);
+}
+
+/* Titres */
+.pds-title {
+  font-size: 4rem;
+  font-weight: 300;
+  letter-spacing: 0.3em;
+  color: #fff;
+}
+.pds-subtitle {
+  font-size: 0.95rem;
+  color: var(--pds-muted);
+  font-weight: 300;
+  letter-spacing: 0.1em;
+}
+.pds-h2 {
+  font-size: 1.8rem;
+  font-weight: 300;
+  color: #fff;
+}
+
+/* Container centré type landing */
+.pds-container {
+  max-width: 500px;
+  margin: 0 auto;
+  width: 100%;
+  padding: 20px;
+}
