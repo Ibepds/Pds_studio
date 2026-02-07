@@ -45,6 +45,7 @@ export default defineNuxtPlugin(() => {
   return {
     provide: {
       loadPaypal,
+      $loadPaypal: loadPaypal,
     },
   }
 })

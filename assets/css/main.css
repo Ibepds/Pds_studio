@@ -178,3 +178,39 @@ body {
   width: 100%;
   padding: 20px;
 }
+
+/* Responsive: mobile-first */
+@media (max-width: 640px) {
+  .pds-card {
+    padding: 16px;
+  }
+  .pds-title {
+    font-size: 2.5rem;
+    letter-spacing: 0.15em;
+  }
+  .pds-h2 {
+    font-size: 1.4rem;
+  }
+  .btn-primary,
+  .btn-secondary {
+    padding: 14px 24px;
+    font-size: 0.95rem;
+    width: 100%;
+  }
+  .pds-option {
+    padding: 14px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Calendrier responsive */
+.calendar-grid .calendar-day {
+  min-height: 36px;
+  font-size: 0.85rem;
+}
+@media (max-width: 480px) {
+  .calendar-grid .calendar-day {
+    min-height: 32px;
+    font-size: 0.8rem;
+  }
+}

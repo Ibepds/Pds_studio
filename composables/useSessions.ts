@@ -112,17 +112,13 @@ export const useSessions = () => {
     }
   }
 
-  /** Toutes les sessions pour une date donnée (pour calcul des créneaux déjà pris) */
+  /** Toutes les sessions pour une date donnée (pour calcul des créneaux déjà pris). Sans orderBy pour éviter l'index composite Firestore. */
   const listSessionsForDate = async (date: string): Promise<Session[]> => {
     const db = getDb()
     if (!db) return []
 
     const col = collection(db, 'sessions')
-    const q = query(
-      col,
-      where('date', '==', date),
-      orderBy('startTime', 'asc'),
-    )
+    const q = query(col, where('date', '==', date))
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
@@ -147,6 +143,7 @@ export const useSessions = () => {
         createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
       })
     })
+    data.sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0))
     return data
   }
 
@@ -225,13 +222,17 @@ export const useSessions = () => {
 
     try {
       const col = collection(db, 'sessions')
-      await addDoc(col, {
+      const raw: Record<string, unknown> = {
         bookerId: user.uid,
-        bookerEmail: user.email,
+        bookerEmail: user.email ?? null,
         ...payload,
         status: 'pending',
         createdAt: new Date(),
-      })
+      }
+      const data = Object.fromEntries(
+        Object.entries(raw).filter(([, v]) => v !== undefined),
+      ) as Record<string, unknown>
+      await addDoc(col, data)
 
       await listForCurrentBooker()
     } catch (e: any) {

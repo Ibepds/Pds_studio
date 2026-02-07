@@ -201,7 +201,7 @@ const handleFilesChange = async (e: Event) => {
         <span class="font-medium text-[var(--pds-text)]">{{ availabilityMonthLabel }}</span>
         <button type="button" class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10" @click="nextAvailabilityMonth">›</button>
       </div>
-      <div class="grid grid-cols-7 gap-2">
+      <div class="grid grid-cols-7 gap-1 sm:gap-2">
         <div v-for="(lab, di) in ['L','M','M','J','V','S','D']" :key="di" class="text-center text-xs text-[var(--pds-muted)]">{{ lab }}</div>
         <button
           v-for="(cell, idx) in availabilityCalendarDays"

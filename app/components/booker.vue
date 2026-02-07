@@ -29,10 +29,7 @@ const {
 } = useSessions()
 const { listAllPublic } = useBeats()
 const { listByRole } = useUsers()
-const {
-  getSlotsForUsersOnDate,
-  getAvailableDatesForUsers,
-} = useAvailability()
+const { getAvailabilityForMonth } = useAvailability()
 
 const ingeList = ref<AppUserPublic[]>([])
 const beatmakerList = ref<AppUserPublic[]>([])
@@ -51,6 +48,7 @@ const success = ref<string | null>(null)
 
 const calendarMonth = ref(new Date())
 const availableDatesInMonth = ref<string[]>([])
+const slotsByDateForMonth = ref<Map<string, { start: string; end: string }[][]>>(new Map())
 const loadingDates = ref(false)
 const availableStartHoursList = ref<number[]>([])
 const loadingSlots = ref(false)
@@ -105,19 +103,25 @@ const canBook = computed(
 watch(
   [calendarMonth, selectedProIds],
   async () => {
+    date.value = ''
+    availableStartHoursList.value = []
+    startHour.value = null
     if (selectedProIds.value.length === 0) {
       availableDatesInMonth.value = []
+      slotsByDateForMonth.value = new Map()
       return
     }
     loadingDates.value = true
     try {
       const y = calendarMonth.value.getFullYear()
       const m = calendarMonth.value.getMonth()
-      availableDatesInMonth.value = await getAvailableDatesForUsers(
+      const { availableDates, slotsByDate } = await getAvailabilityForMonth(
         selectedProIds.value,
         y,
         m,
       )
+      availableDatesInMonth.value = availableDates
+      slotsByDateForMonth.value = slotsByDate
     } finally {
       loadingDates.value = false
     }
@@ -125,40 +129,43 @@ watch(
   { immediate: true },
 )
 
+async function loadAvailableSlots() {
+  const d = date.value
+  const dur = durationHours.value
+  if (!d || dur == null) {
+    availableStartHoursList.value = []
+    return
+  }
+  const slotsPerUser = slotsByDateForMonth.value.get(d)
+
+  if (!slotsPerUser || slotsPerUser.length === 0) {
+    availableStartHoursList.value = []
+    return
+  }
+  loadingSlots.value = true
+  try {
+    const slots = intersectSlots(slotsPerUser)
+    const hours = getStartHoursFromSlots(slots, dur)
+    const booked = await listSessionsForDate(d)
+    const blocks: SessionBlock[] = booked.map((s) => ({
+      date: s.date,
+      startTime: s.startTime,
+      endTime: s.endTime,
+    }))
+    availableStartHoursList.value = filterOutBookedSlots(hours, d, dur, blocks)
+    if (startHour.value != null && !availableStartHoursList.value.includes(startHour.value)) {
+      startHour.value = null
+    }
+  } catch {
+    availableStartHoursList.value = []
+  } finally {
+    loadingSlots.value = false
+  }
+}
+
 watch(
   [date, durationHours, selectedProIds],
-  async () => {
-    if (!date.value || !durationHours.value || selectedProIds.value.length === 0) {
-      availableStartHoursList.value = []
-      return
-    }
-    loadingSlots.value = true
-    try {
-      const map = await getSlotsForUsersOnDate(selectedProIds.value, date.value)
-      const slotsPerUser = selectedProIds.value.map((id) => map.get(id) ?? [])
-      const slots = intersectSlots(slotsPerUser)
-      const hours = getStartHoursFromSlots(slots, durationHours.value)
-      const booked = await listSessionsForDate(date.value)
-      const blocks: SessionBlock[] = booked.map((s) => ({
-        date: s.date,
-        startTime: s.startTime,
-        endTime: s.endTime,
-      }))
-      availableStartHoursList.value = filterOutBookedSlots(
-        hours,
-        date.value,
-        durationHours.value,
-        blocks,
-      )
-      if (!availableStartHoursList.value.includes(startHour.value!)) {
-        startHour.value = null
-      }
-    } catch {
-      availableStartHoursList.value = []
-    } finally {
-      loadingSlots.value = false
-    }
-  },
+  () => { loadAvailableSlots() },
   { immediate: true },
 )
 
@@ -199,6 +206,7 @@ function nextMonth() {
 function selectCalendarDate(dateStr: string) {
   if (!dateStr) return
   date.value = dateStr
+  loadAvailableSlots()
 }
 
 function formatHour(h: number) {
@@ -245,7 +253,11 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
   paypalError.value = null
   success.value = null
   try {
-    const paypal = await (nuxtApp as any).$loadPaypal()
+    const loadPaypalFn = (nuxtApp as any).$loadPaypal ?? (nuxtApp as any).loadPaypal
+    if (typeof loadPaypalFn !== 'function') {
+      throw new Error('PayPal non chargé (vérifier le plugin et NUXT_PUBLIC_PAYPAL_CLIENT_ID)')
+    }
+    const paypal = await loadPaypalFn()
     if (!paypal) throw new Error('PayPal non disponible')
     if (paypalRenderedFor.value === sessionId) return
     const valueApi = (typeof deposit === 'number' ? deposit : 50).toFixed(2)
@@ -305,12 +317,12 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
       <h3 class="pds-subtitle mb-4">
         Combien d’heures souhaitez-vous réserver ?
       </h3>
-      <div class="grid grid-cols-2 gap-3">
+      <div class="grid grid-cols-2 gap-2 sm:gap-3">
         <button
           v-for="h in DURATION_OPTIONS"
           :key="h"
           type="button"
-          class="pds-option"
+          class="pds-option min-h-[48px] touch-manipulation"
           :class="{ selected: durationHours === h }"
           @click="durationHours = h"
         >
@@ -377,7 +389,7 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
         <div v-if="loadingDates" class="text-center text-sm text-[var(--pds-muted)]">
           Chargement des dates...
         </div>
-        <div v-else class="calendar-grid grid grid-cols-7 gap-2">
+        <div v-else class="calendar-grid grid grid-cols-7 gap-1 sm:gap-2">
           <div
             v-for="(d, di) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']"
             :key="di"
@@ -411,18 +423,18 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
       <h3 class="pds-subtitle">
         Heure de début
       </h3>
-      <div v-if="loadingSlots" class="text-sm text-[var(--pds-muted)]">
+      <div v-if="loadingSlots" class="min-h-[80px] text-sm text-[var(--pds-muted)]">
         Chargement des créneaux...
       </div>
-      <div v-else-if="availableStartHoursList.length === 0" class="text-sm text-amber-400">
-        Aucun créneau disponible pour cette date avec la durée choisie.
+      <div v-else-if="availableStartHoursList.length === 0" class="min-h-[48px] text-sm text-amber-400">
+        Aucun créneau disponible pour cette date avec la durée choisie. Les pros ont-ils bien enregistré leurs dispos pour ce jour ?
       </div>
       <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3">
         <button
           v-for="h in availableStartHoursList"
           :key="h"
           type="button"
-          class="pds-option !py-3"
+          class="pds-option !py-3 min-h-[48px] touch-manipulation"
           :class="{ selected: startHour === h }"
           @click="startHour = h"
         >

@@ -1,7 +1,7 @@
 <template>
   <div class="min-h-screen bg-[var(--pds-bg)] text-[var(--pds-text)]">
     <header class="border-b border-[var(--pds-border)] bg-[var(--pds-card)]/80">
-      <nav class="mx-auto flex max-w-3xl items-center justify-between px-4 py-3">
+      <nav class="mx-auto flex max-w-3xl flex-wrap items-center justify-between gap-2 px-4 py-3 sm:px-6">
         <NuxtLink to="/" class="text-xl font-light tracking-[0.2em] text-white">
           PDS
         </NuxtLink>
@@ -22,7 +22,7 @@
       </nav>
     </header>
 
-    <main class="mx-auto max-w-3xl px-4 py-8">
+    <main class="mx-auto max-w-3xl px-4 py-6 sm:py-8 sm:px-6">
       <NuxtPage />
     </main>
   </div>

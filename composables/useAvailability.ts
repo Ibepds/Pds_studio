@@ -191,6 +191,14 @@ export const useAvailability = () => {
     }
   }
 
+  function normalizeSlot(s: { start?: string; end?: string }): TimeSlot | null {
+  if (!s || s.start == null || s.end == null) return null
+  const start = String(s.start).trim()
+  const end = String(s.end).trim()
+  if (!start || !end) return null
+  return { start, end }
+}
+
   /** Get slots for several users on one date (for Booker: intersection) */
   const getSlotsForUsersOnDate = async (
     userIds: string[],
@@ -208,8 +216,14 @@ export const useAvailability = () => {
           map.set(uid, [])
           return
         }
-        const data = snap.data() as { slots?: TimeSlot[] }
-        map.set(uid, data.slots ?? [])
+        const data = snap.data() as { slots?: unknown[] }
+        const raw = data.slots ?? []
+        const slots: TimeSlot[] = []
+        for (const item of raw) {
+          const slot = normalizeSlot(item as { start?: string; end?: string })
+          if (slot) slots.push(slot)
+        }
+        map.set(uid, slots)
       }),
     )
     return map
@@ -221,9 +235,22 @@ export const useAvailability = () => {
     year: number,
     month: number,
   ): Promise<string[]> => {
-    if (userIds.length === 0) return []
+    const { availableDates } = await getAvailabilityForMonth(userIds, year, month)
+    return availableDates
+  }
+
+  /** Same as above but also returns slots by date so Booker can show hours without a second fetch */
+  const getAvailabilityForMonth = async (
+    userIds: string[],
+    year: number,
+    month: number,
+  ): Promise<{ availableDates: string[]; slotsByDate: Map<string, TimeSlot[][]> }> => {
+    const slotsByDate = new Map<string, TimeSlot[][]>()
+    if (userIds.length === 0) {
+      return { availableDates: [], slotsByDate }
+    }
     const db = getDb()
-    if (!db) return []
+    if (!db) return { availableDates: [], slotsByDate }
 
     const firstDay = `${year}-${String(month + 1).padStart(2, '0')}-01`
     const lastDayNum = new Date(year, month + 1, 0).getDate()
@@ -241,9 +268,15 @@ export const useAvailability = () => {
       )
       const snap = await getDocs(q)
       snap.forEach((d) => {
-        const data = d.data() as { date: string; slots?: TimeSlot[] }
-        const dateStr = data.date
-        const slots = data.slots ?? []
+        const data = d.data() as { date: string; slots?: unknown[] }
+        const dateStr = String(data.date || '').trim()
+        if (!dateStr) return
+        const raw = data.slots ?? []
+        const slots: TimeSlot[] = []
+        for (const item of raw) {
+          const slot = normalizeSlot(item as { start?: string; end?: string })
+          if (slot) slots.push(slot)
+        }
         if (slots.length === 0) return
         if (!byDate.has(dateStr)) byDate.set(dateStr, [])
         byDate.get(dateStr)!.push(slots)
@@ -257,9 +290,12 @@ export const useAvailability = () => {
       const slotsPerUser = byDate.get(dateStr)
       if (!slotsPerUser || slotsPerUser.length !== userIds.length) continue
       const intersection = intersectSlots(slotsPerUser)
-      if (intersection.length > 0) availableDates.push(dateStr)
+      if (intersection.length > 0) {
+        availableDates.push(dateStr)
+        slotsByDate.set(dateStr, slotsPerUser)
+      }
     }
-    return availableDates.sort()
+    return { availableDates: availableDates.sort(), slotsByDate }
   }
 
   return {
@@ -268,6 +304,7 @@ export const useAvailability = () => {
     listMyAvailability,
     getSlotsForUsersOnDate,
     getAvailableDatesForUsers,
+    getAvailabilityForMonth,
     loading,
     error,
   }
