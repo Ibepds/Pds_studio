@@ -5,10 +5,13 @@
 export const PRICE_WEEKDAY = 50
 export const PRICE_WEEKEND = 60
 export const DEPOSIT_PERCENT = 0.3
-export const DURATION_OPTIONS = [1, 2, 3, 4, 6] as const
+export const DURATION_MIN_HOURS = 2
+export const DURATION_MAX_HOURS = 12 // 10h–22h = 12h
 export const SLOT_START_HOUR = 10
 export const SLOT_END_HOUR = 22
 
+/** Options de durée de 2h à 12h (pour select) */
+export const DURATION_OPTIONS = [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] as const
 export type DurationHours = (typeof DURATION_OPTIONS)[number]
 
 /** Retourne true si la date est un samedi ou dimanche */

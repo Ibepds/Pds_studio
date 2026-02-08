@@ -2,13 +2,17 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useSessions } from '../../composables/useSessions'
 import { useSessionFiles } from '../../composables/useSessionFiles'
-import { useAvailability } from '../../composables/useAvailability'
+import { useAvailability, slotOverlapsAny } from '../../composables/useAvailability'
+import { useAuth } from '../../composables/useAuth'
 import { SLOT_START_HOUR, SLOT_END_HOUR } from '../../utils/pricing'
 import type { TimeSlot } from '../../composables/useAvailability'
+import type { Session } from '../../composables/useSessions'
 
 const {
   sessions,
   listAllUpcoming,
+  listAllPending,
+  updateSessionStatus,
   loading: sessionsLoading,
 } = useSessions()
 const {
@@ -19,6 +23,7 @@ const {
   uploadForSession,
 } = useSessionFiles()
 const { setSlotsForDate, getMySlotsForDate } = useAvailability()
+const { currentUser } = useAuth()
 
 const selectedSessionId = ref<string | null>(null)
 const selectedSessionLabel = computed(() => {
@@ -26,8 +31,19 @@ const selectedSessionLabel = computed(() => {
   if (!s) return ''
   return `${s.date} • ${s.startTime}-${s.endTime} • ${s.bookerEmail ?? s.bookerId}`
 })
+
+/** Sessions à venir uniquement celles confirmées par cet ingé (ingeId === currentUser) */
+const myUpcomingSessions = computed(() => {
+  const uid = currentUser.value?.uid
+  if (!uid) return []
+  return sessions.value.filter((s) => s.ingeId === uid)
+})
 const uploadError = ref<string | null>(null)
 const uploadSuccess = ref<string | null>(null)
+
+const sessionsToConfirm = ref<Session[]>([])
+const loadingSessionsToConfirm = ref(false)
+const confirmingId = ref<string | null>(null)
 
 const availabilityMonth = ref(new Date())
 const availabilityDate = ref<string>('')
@@ -64,7 +80,37 @@ const availabilityMonthLabel = computed(() => {
   return `${months[availabilityMonth.value.getMonth()]} ${availabilityMonth.value.getFullYear()}`
 })
 
+async function loadSessionsToConfirm() {
+  loadingSessionsToConfirm.value = true
+  try {
+    const pending = await listAllPending()
+    const filtered: Session[] = []
+    for (const s of pending) {
+      const mySlots = await getMySlotsForDate(s.date)
+      const sessionSlot = { start: s.startTime, end: s.endTime }
+      if (slotOverlapsAny(sessionSlot, mySlots)) filtered.push(s)
+    }
+    sessionsToConfirm.value = filtered
+  } finally {
+    loadingSessionsToConfirm.value = false
+  }
+}
+
+async function confirmSession(sessionId: string) {
+  const uid = currentUser.value?.uid
+  if (!uid) return
+  confirmingId.value = sessionId
+  try {
+    await updateSessionStatus(sessionId, 'confirmed', undefined, uid)
+    sessionsToConfirm.value = sessionsToConfirm.value.filter((s) => s.id !== sessionId)
+    await listAllUpcoming()
+  } finally {
+    confirmingId.value = null
+  }
+}
+
 onMounted(async () => {
+  await loadSessionsToConfirm()
   await listAllUpcoming()
 })
 
@@ -144,17 +190,52 @@ const handleFilesChange = async (e: Event) => {
 
     <div class="pds-card space-y-3">
       <h3 class="pds-subtitle">
+        Sessions à confirmer (tes dispos correspondent)
+      </h3>
+      <p class="text-sm text-[var(--pds-muted)]">
+        Ces réservations correspondent à tes créneaux. Confirme pour les valider.
+      </p>
+      <div v-if="loadingSessionsToConfirm" class="text-sm text-[var(--pds-muted)]">
+        Chargement...
+      </div>
+      <div v-else-if="sessionsToConfirm.length === 0" class="text-sm text-[var(--pds-muted)]">
+        Aucune session en attente sur tes créneaux.
+      </div>
+      <div v-else class="space-y-2">
+        <div
+          v-for="s in sessionsToConfirm"
+          :key="s.id"
+          class="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-[var(--pds-border)] bg-[var(--pds-bg)] p-3"
+        >
+          <div>
+            <p class="font-medium">{{ s.date }} • {{ s.startTime }} – {{ s.endTime }}</p>
+            <p class="text-xs text-[var(--pds-muted)]">{{ s.bookerEmail ?? s.bookerId }} · {{ s.style }}</p>
+          </div>
+          <button
+            type="button"
+            class="btn-primary !py-2 !px-3 !text-sm"
+            :disabled="confirmingId === s.id"
+            @click="confirmSession(s.id)"
+          >
+            {{ confirmingId === s.id ? 'Confirmation...' : 'Confirmer la session' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="pds-card space-y-3">
+      <h3 class="pds-subtitle">
         Sessions à venir
       </h3>
       <div v-if="sessionsLoading" class="text-sm text-[var(--pds-muted)]">
         Chargement des sessions...
       </div>
-      <div v-else-if="sessions.length === 0" class="text-sm text-[var(--pds-muted)]">
+      <div v-else-if="myUpcomingSessions.length === 0" class="text-sm text-[var(--pds-muted)]">
         Aucune session à venir pour le moment.
       </div>
       <div v-else class="space-y-2">
         <button
-          v-for="s in sessions"
+          v-for="s in myUpcomingSessions"
           :key="s.id"
           type="button"
           class="flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors"

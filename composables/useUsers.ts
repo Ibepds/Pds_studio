@@ -1,4 +1,4 @@
-import { collection, getDocs, getFirestore, query, where } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDocs, getFirestore, query, where } from 'firebase/firestore'
 import { getApps, initializeApp } from 'firebase/app'
 import type { UserRole } from './useAuth'
 
@@ -57,5 +57,14 @@ export const useUsers = () => {
     }
   }
 
-  return { listByRole, loading, error }
+  /** Supprime le document utilisateur (Firestore). Réservé admin. L'utilisateur perd son rôle ingé/beatmaker. */
+  const deleteUser = async (uid: string): Promise<void> => {
+    const db = getDb()
+    if (!db) throw new Error('Base de données non disponible')
+    error.value = null
+    const userRef = doc(db, 'users', uid)
+    await deleteDoc(userRef)
+  }
+
+  return { listByRole, deleteUser, loading, error }
 }

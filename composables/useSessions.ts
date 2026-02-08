@@ -28,6 +28,8 @@ export interface Session {
   beatTitle?: string
   beatmakerId?: string
   ingeId?: string
+  bookerProdUrl?: string
+  bookerProdFileName?: string
   status: SessionStatus
   paypalOrderId?: string
   durationHours?: number
@@ -61,23 +63,21 @@ export const useSessions = () => {
   const loading = useState('sessionsLoading', () => false)
   const error = useState<string | null>('sessionsError', () => null)
 
-  // Sessions pour le booker connecté
+  // Sessions pour le booker connecté (sans orderBy pour éviter l'index composite Firestore)
   const listForCurrentBooker = async () => {
     const db = getDb()
     const user = currentUser.value as AppUser | null
-    if (!db || !user) return
+    if (!db || !user) {
+      sessions.value = []
+      return
+    }
 
     loading.value = true
     error.value = null
 
     try {
       const col = collection(db, 'sessions')
-      const q = query(
-        col,
-        where('bookerId', '==', user.uid),
-        orderBy('date', 'asc'),
-        orderBy('startTime', 'asc'),
-      )
+      const q = query(col, where('bookerId', '==', user.uid))
       const snap = await getDocs(q)
 
       const data: Session[] = []
@@ -95,6 +95,8 @@ export const useSessions = () => {
           beatTitle: raw.beatTitle,
           beatmakerId: raw.beatmakerId,
           ingeId: raw.ingeId,
+          bookerProdUrl: raw.bookerProdUrl,
+          bookerProdFileName: raw.bookerProdFileName,
           status: raw.status ?? 'pending',
           paypalOrderId: raw.paypalOrderId,
           durationHours: raw.durationHours,
@@ -103,7 +105,7 @@ export const useSessions = () => {
           createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
         })
       })
-
+      data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
       sessions.value = data
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors du chargement des sessions'
@@ -135,6 +137,8 @@ export const useSessions = () => {
         beatTitle: raw.beatTitle,
         beatmakerId: raw.beatmakerId,
         ingeId: raw.ingeId,
+        bookerProdUrl: raw.bookerProdUrl,
+        bookerProdFileName: raw.bookerProdFileName,
         status: raw.status ?? 'pending',
         paypalOrderId: raw.paypalOrderId,
         durationHours: raw.durationHours,
@@ -160,12 +164,7 @@ export const useSessions = () => {
       const iso = today.toISOString().slice(0, 10) // YYYY-MM-DD
 
       const col = collection(db, 'sessions')
-      const q = query(
-        col,
-        where('date', '>=', iso),
-        orderBy('date', 'asc'),
-        orderBy('startTime', 'asc'),
-      )
+      const q = query(col, where('date', '>=', iso))
       const snap = await getDocs(q)
 
       const data: Session[] = []
@@ -183,6 +182,8 @@ export const useSessions = () => {
           beatTitle: raw.beatTitle,
           beatmakerId: raw.beatmakerId,
           ingeId: raw.ingeId,
+          bookerProdUrl: raw.bookerProdUrl,
+          bookerProdFileName: raw.bookerProdFileName,
           status: raw.status ?? 'pending',
           paypalOrderId: raw.paypalOrderId,
           durationHours: raw.durationHours,
@@ -191,7 +192,7 @@ export const useSessions = () => {
           createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
         })
       })
-
+      data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
       sessions.value = data
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors du chargement des sessions'
@@ -209,6 +210,8 @@ export const useSessions = () => {
     beatTitle?: string
     beatmakerId?: string
     ingeId?: string
+    bookerProdUrl?: string
+    bookerProdFileName?: string
     durationHours?: number
     totalPrice?: number
     depositAmount?: number
@@ -286,6 +289,8 @@ export const useSessions = () => {
           beatTitle: raw.beatTitle,
           beatmakerId: raw.beatmakerId,
           ingeId: raw.ingeId,
+          bookerProdUrl: raw.bookerProdUrl,
+          bookerProdFileName: raw.bookerProdFileName,
           status: raw.status ?? 'pending',
           paypalOrderId: raw.paypalOrderId,
           durationHours: raw.durationHours,
@@ -303,10 +308,85 @@ export const useSessions = () => {
     }
   }
 
+  /** Toutes les sessions à partir d’une date (pour admin) */
+  const listAllFromDate = async (fromDate: string): Promise<Session[]> => {
+    const db = getDb()
+    if (!db) return []
+    const col = collection(db, 'sessions')
+    const q = query(col, where('date', '>=', fromDate))
+    const snap = await getDocs(q)
+    const data: Session[] = []
+    snap.forEach((d) => {
+      const raw = d.data() as any
+      data.push({
+        id: d.id,
+        bookerId: raw.bookerId,
+        bookerEmail: raw.bookerEmail ?? null,
+        date: raw.date,
+        startTime: raw.startTime,
+        endTime: raw.endTime,
+        style: raw.style ?? '',
+        beatId: raw.beatId,
+        beatTitle: raw.beatTitle,
+        beatmakerId: raw.beatmakerId,
+        ingeId: raw.ingeId,
+        bookerProdUrl: raw.bookerProdUrl,
+        bookerProdFileName: raw.bookerProdFileName,
+        status: raw.status ?? 'pending',
+        paypalOrderId: raw.paypalOrderId,
+        durationHours: raw.durationHours,
+        totalPrice: raw.totalPrice,
+        depositAmount: raw.depositAmount,
+        createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
+      })
+    })
+    data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+    return data
+  }
+
+  /** Toutes les sessions en attente (pour ingé confirmation et admin) */
+  const listAllPending = async (): Promise<Session[]> => {
+    const db = getDb()
+    if (!db) return []
+    const today = new Date().toISOString().slice(0, 10)
+    const col = collection(db, 'sessions')
+    const q = query(col, where('date', '>=', today))
+    const snap = await getDocs(q)
+    const data: Session[] = []
+    snap.forEach((d) => {
+      const raw = d.data() as any
+      data.push({
+        id: d.id,
+        bookerId: raw.bookerId,
+        bookerEmail: raw.bookerEmail ?? null,
+        date: raw.date,
+        startTime: raw.startTime,
+        endTime: raw.endTime,
+        style: raw.style ?? '',
+        beatId: raw.beatId,
+        beatTitle: raw.beatTitle,
+        beatmakerId: raw.beatmakerId,
+        ingeId: raw.ingeId,
+        bookerProdUrl: raw.bookerProdUrl,
+        bookerProdFileName: raw.bookerProdFileName,
+        status: raw.status ?? 'pending',
+        paypalOrderId: raw.paypalOrderId,
+        durationHours: raw.durationHours,
+        totalPrice: raw.totalPrice,
+        depositAmount: raw.depositAmount,
+        createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
+      })
+    })
+    const pending = data.filter((s) => s.status === 'pending')
+    pending.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+    return pending
+  }
+
   const updateSessionStatus = async (
     sessionId: string,
     status: SessionStatus,
     paypalOrderId?: string,
+    ingeId?: string,
   ) => {
     const db = getDb()
     if (!db) return
@@ -314,9 +394,9 @@ export const useSessions = () => {
     await updateDoc(doc(db, 'sessions', sessionId), {
       status,
       ...(paypalOrderId ? { paypalOrderId } : {}),
+      ...(ingeId ? { ingeId } : {}),
     })
 
-    // On recharge la liste du booker connecté
     await listForCurrentBooker()
   }
 
@@ -329,6 +409,8 @@ export const useSessions = () => {
     listAllUpcoming,
     listForCurrentBeatmaker,
     listSessionsForDate,
+    listAllPending,
+    listAllFromDate,
     bookSession,
     updateSessionStatus,
   }

@@ -2,20 +2,16 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useSessions } from '../../composables/useSessions'
 import { useBeats } from '../../composables/useBeats'
-import { useUsers } from '../../composables/useUsers'
-import {
-  useAvailability,
-  intersectSlots,
-  getStartHoursFromSlots,
-  filterOutBookedSlots,
-  type SessionBlock,
-} from '../../composables/useAvailability'
+import { useBookerProdUpload } from '../../composables/useBookerProdUpload'
+import { usePaypal } from '../../composables/usePaypal'
+import { useAuth } from '../../composables/useAuth'
+import { filterOutBookedSlots, type SessionBlock } from '../../composables/useAvailability'
+import { getAvailableStartHours } from '../../utils/pricing'
 import {
   DURATION_OPTIONS,
   getDeposit,
   getTotalPrice,
 } from '../../utils/pricing'
-import type { AppUserPublic } from '../../composables/useUsers'
 
 const {
   sessions,
@@ -27,53 +23,41 @@ const {
   loading: sessionsLoading,
   error: sessionsError,
 } = useSessions()
-const { listAllPublic } = useBeats()
-const { listByRole } = useUsers()
-const { getAvailabilityForMonth } = useAvailability()
-
-const ingeList = ref<AppUserPublic[]>([])
-const beatmakerList = ref<AppUserPublic[]>([])
-const selectedIngeId = ref<string>('')
-const selectedBeatmakerId = ref<string>('')
+const { listAllPublic, beats } = useBeats()
+const { upload: uploadBookerProd } = useBookerProdUpload()
+const { currentUser } = useAuth()
 
 const durationHours = ref<number | null>(null)
 const date = ref<string>('')
 const startHour = ref<number | null>(null)
 const style = ref<string>('Trap')
-const beatTitle = ref<string>('')
-const selectedBeatId = ref<string | null>(null)
-const selectedBeatOwnerId = ref<string | null>(null)
+const selectedBeatId = ref<string>('')
+const selectedBeatOwnerId = ref<string>('')
+const bookerProdFile = ref<File | null>(null)
 const localError = ref<string | null>(null)
 const success = ref<string | null>(null)
+const uploadingProd = ref(false)
 
 const calendarMonth = ref(new Date())
-const availableDatesInMonth = ref<string[]>([])
-const slotsByDateForMonth = ref<Map<string, { start: string; end: string }[][]>>(new Map())
-const loadingDates = ref(false)
 const availableStartHoursList = ref<number[]>([])
 const loadingSlots = ref(false)
 
-const nuxtApp = useNuxtApp()
 const paypalError = ref<string | null>(null)
 const paypalRenderedFor = ref<string | null>(null)
 
-onMounted(async () => {
-  await listForCurrentBooker()
-  await listAllPublic()
-  ingeList.value = await listByRole('inge')
-  beatmakerList.value = await listByRole('beatmaker')
+onMounted(() => {
+  listAllPublic()
 })
 
-const selectedProIds = computed(() => {
-  const ids: string[] = []
-  if (selectedIngeId.value) ids.push(selectedIngeId.value)
-  if (selectedBeatmakerId.value) ids.push(selectedBeatmakerId.value)
-  return ids
-})
-
-const canChooseDate = computed(
-  () => durationHours.value != null && selectedProIds.value.length > 0,
+watch(
+  () => currentUser.value?.uid,
+  (uid) => {
+    if (uid) listForCurrentBooker()
+  },
+  { immediate: true },
 )
+
+const canChooseDate = computed(() => durationHours.value != null)
 
 const selectedDate = computed(() => (date.value ? new Date(date.value + 'T12:00:00') : null))
 const totalPrice = computed(() =>
@@ -95,38 +79,8 @@ const canBook = computed(
       date.value &&
       durationHours.value &&
       startHour.value != null &&
-      totalPrice.value > 0 &&
-      selectedProIds.value.length > 0
+      totalPrice.value > 0
     ),
-)
-
-watch(
-  [calendarMonth, selectedProIds],
-  async () => {
-    date.value = ''
-    availableStartHoursList.value = []
-    startHour.value = null
-    if (selectedProIds.value.length === 0) {
-      availableDatesInMonth.value = []
-      slotsByDateForMonth.value = new Map()
-      return
-    }
-    loadingDates.value = true
-    try {
-      const y = calendarMonth.value.getFullYear()
-      const m = calendarMonth.value.getMonth()
-      const { availableDates, slotsByDate } = await getAvailabilityForMonth(
-        selectedProIds.value,
-        y,
-        m,
-      )
-      availableDatesInMonth.value = availableDates
-      slotsByDateForMonth.value = slotsByDate
-    } finally {
-      loadingDates.value = false
-    }
-  },
-  { immediate: true },
 )
 
 async function loadAvailableSlots() {
@@ -136,16 +90,9 @@ async function loadAvailableSlots() {
     availableStartHoursList.value = []
     return
   }
-  const slotsPerUser = slotsByDateForMonth.value.get(d)
-
-  if (!slotsPerUser || slotsPerUser.length === 0) {
-    availableStartHoursList.value = []
-    return
-  }
   loadingSlots.value = true
   try {
-    const slots = intersectSlots(slotsPerUser)
-    const hours = getStartHoursFromSlots(slots, dur)
+    const hours = getAvailableStartHours(dur)
     const booked = await listSessionsForDate(d)
     const blocks: SessionBlock[] = booked.map((s) => ({
       date: s.date,
@@ -164,7 +111,7 @@ async function loadAvailableSlots() {
 }
 
 watch(
-  [date, durationHours, selectedProIds],
+  [date, durationHours],
   () => { loadAvailableSlots() },
   { immediate: true },
 )
@@ -176,7 +123,6 @@ const calendarDays = computed(() => {
   const startOffset = first.getDay() === 0 ? 6 : first.getDay() - 1
   const daysInMonth = new Date(y, m + 1, 0).getDate()
   const today = new Date().toISOString().slice(0, 10)
-  const availableSet = new Set(availableDatesInMonth.value)
   const days: { day: number | null; dateStr: string; disabled: boolean; available: boolean }[] = []
   for (let i = 0; i < startOffset; i++) {
     days.push({ day: null, dateStr: '', disabled: true, available: false })
@@ -184,8 +130,7 @@ const calendarDays = computed(() => {
   for (let day = 1; day <= daysInMonth; day++) {
     const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
     const disabled = dateStr < today
-    const available = availableSet.has(dateStr)
-    days.push({ day, dateStr, disabled, available })
+    days.push({ day, dateStr, disabled, available: !disabled })
   }
   return days
 })
@@ -213,14 +158,38 @@ function formatHour(h: number) {
   return `${h.toString().padStart(2, '0')}:00`
 }
 
+function handleBookerProdFileChange(e: Event) {
+  const input = e.target as HTMLInputElement
+  const f = input.files?.[0]
+  bookerProdFile.value = f || null
+  if (f) selectedBeatId.value = ''
+}
+
+function handleBeatSelect() {
+  bookerProdFile.value = null
+}
+
 const handleBook = async () => {
   localError.value = null
   success.value = null
   if (!canBook.value) {
-    localError.value = 'Choisis au moins un pro, la durée, la date et l’heure.'
+    localError.value = 'Choisis la durée, la date et l’heure.'
     return
   }
   try {
+    let bookerProdUrl: string | undefined
+    let bookerProdFileName: string | undefined
+    if (bookerProdFile.value) {
+      uploadingProd.value = true
+      try {
+        const res = await uploadBookerProd(bookerProdFile.value)
+        bookerProdUrl = res.url
+        bookerProdFileName = res.fileName
+      } finally {
+        uploadingProd.value = false
+      }
+    }
+    const selectedBeat = selectedBeatId.value ? beats.value.find((b) => b.id === selectedBeatId.value) : null
     const startTime = formatHour(startHour.value!)
     const endTime = formatHour(startHour.value! + durationHours.value!)
     await bookSession({
@@ -228,10 +197,11 @@ const handleBook = async () => {
       startTime,
       endTime,
       style: style.value,
-      beatId: selectedBeatId.value || undefined,
-      beatTitle: beatTitle.value || undefined,
-      beatmakerId: selectedBeatmakerId.value || undefined,
-      ingeId: selectedIngeId.value || undefined,
+      beatId: selectedBeat?.id,
+      beatTitle: selectedBeat?.title,
+      beatmakerId: selectedBeat?.ownerId,
+      bookerProdUrl,
+      bookerProdFileName,
       durationHours: durationHours.value!,
       totalPrice: totalPrice.value,
       depositAmount: depositAmount.value,
@@ -240,12 +210,13 @@ const handleBook = async () => {
     durationHours.value = null
     date.value = ''
     startHour.value = null
-    selectedIngeId.value = ''
-    selectedBeatmakerId.value = ''
-    beatTitle.value = ''
+    selectedBeatId.value = ''
+    selectedBeatOwnerId.value = ''
+    bookerProdFile.value = null
     await listForCurrentBooker()
   } catch (e: any) {
     localError.value = e?.message ?? 'Erreur lors de la réservation.'
+    uploadingProd.value = false
   }
 }
 
@@ -253,10 +224,8 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
   paypalError.value = null
   success.value = null
   try {
-    const loadPaypalFn = (nuxtApp as any).$loadPaypal ?? (nuxtApp as any).loadPaypal
-    if (typeof loadPaypalFn !== 'function') {
-      throw new Error('PayPal non chargé (vérifier le plugin et NUXT_PUBLIC_PAYPAL_CLIENT_ID)')
-    }
+    // Récupérer le chargeur au clic (côté client) pour éviter le contexte SSR
+    const loadPaypalFn = usePaypal()
     const paypal = await loadPaypalFn()
     if (!paypal) throw new Error('PayPal non disponible')
     if (paypalRenderedFor.value === sessionId) return
@@ -312,58 +281,22 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
       </p>
     </div>
 
-    <!-- Durée -->
+    <!-- Durée (2h à 12h) -->
     <div>
       <h3 class="pds-subtitle mb-4">
-        Combien d’heures souhaitez-vous réserver ?
+        Combien d’heures souhaitez-vous réserver ? (2h minimum)
       </h3>
-      <div class="grid grid-cols-2 gap-2 sm:gap-3">
-        <button
-          v-for="h in DURATION_OPTIONS"
-          :key="h"
-          type="button"
-          class="pds-option min-h-[48px] touch-manipulation"
-          :class="{ selected: durationHours === h }"
-          @click="durationHours = h"
-        >
+      <select v-model="durationHours" class="pds-input w-full max-w-xs">
+        <option :value="null">
+          Choisir
+        </option>
+        <option v-for="h in DURATION_OPTIONS" :key="h" :value="h">
           {{ h }} heure{{ h > 1 ? 's' : '' }}
-        </button>
-      </div>
+        </option>
+      </select>
     </div>
 
-    <!-- Choisir ingé son et/ou beatmaker -->
-    <div class="pds-card space-y-4">
-      <h3 class="pds-subtitle">
-        Avec qui réserver ? (au moins un)
-      </h3>
-      <div class="form-group">
-        <label class="pds-label">Ingé son</label>
-        <select v-model="selectedIngeId" class="pds-input">
-          <option value="">
-            Aucun
-          </option>
-          <option v-for="u in ingeList" :key="u.uid" :value="u.uid">
-            {{ u.email || u.uid }}
-          </option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="pds-label">Beatmaker</label>
-        <select v-model="selectedBeatmakerId" class="pds-input">
-          <option value="">
-            Aucun
-          </option>
-          <option v-for="u in beatmakerList" :key="u.uid" :value="u.uid">
-            {{ u.email || u.uid }}
-          </option>
-        </select>
-      </div>
-      <p v-if="selectedProIds.length === 0" class="text-sm text-amber-400">
-        Choisis au moins un ingé son ou un beatmaker pour voir les créneaux.
-      </p>
-    </div>
-
-    <!-- Calendrier (dates où les pros choisis sont dispo) -->
+    <!-- Calendrier -->
     <div v-if="canChooseDate" class="space-y-3">
       <h3 class="pds-subtitle">
         Choisissez une date
@@ -386,10 +319,7 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
             ›
           </button>
         </div>
-        <div v-if="loadingDates" class="text-center text-sm text-[var(--pds-muted)]">
-          Chargement des dates...
-        </div>
-        <div v-else class="calendar-grid grid grid-cols-7 gap-1 sm:gap-2">
+        <div class="calendar-grid grid grid-cols-7 gap-1 sm:gap-2">
           <div
             v-for="(d, di) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']"
             :key="di"
@@ -406,10 +336,10 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
               'cursor-default border-transparent bg-transparent': cell.day == null,
               'cursor-not-allowed opacity-40': cell.disabled && cell.day != null,
               'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white': date === cell.dateStr,
-              'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]': cell.day != null && !cell.disabled && cell.available && date !== cell.dateStr,
-              'border-[var(--pds-border)] bg-[var(--pds-bg)] opacity-50': cell.day != null && !cell.disabled && !cell.available,
+              'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]': cell.day != null && !cell.disabled && date !== cell.dateStr,
+              'border-[var(--pds-border)] bg-[var(--pds-bg)]': cell.day != null && !cell.disabled && date !== cell.dateStr,
             }"
-            :disabled="cell.day == null || cell.disabled || !cell.available"
+            :disabled="cell.day == null || cell.disabled"
             @click="selectCalendarDate(cell.dateStr)"
           >
             {{ cell.day ?? '' }}
@@ -418,8 +348,8 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
       </div>
     </div>
 
-    <!-- Heure de début (créneaux dispo pour les pros choisis) -->
-    <div v-if="date && durationHours && selectedProIds.length > 0" class="space-y-3">
+    <!-- Heure de début -->
+    <div v-if="date && durationHours" class="space-y-3">
       <h3 class="pds-subtitle">
         Heure de début
       </h3>
@@ -480,13 +410,27 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
         </select>
       </div>
       <div class="form-group">
-        <label class="pds-label">Prod (optionnel)</label>
+        <label class="pds-label">Uploader ma prod (optionnel)</label>
         <input
-          v-model="beatTitle"
-          type="text"
-          class="pds-input"
-          placeholder="Ex: Type beat Drake x Travis"
+          type="file"
+          accept="audio/*"
+          class="w-full text-sm text-[var(--pds-text)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--pds-primary)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
+          @change="handleBookerProdFileChange"
         >
+        <p v-if="bookerProdFile" class="mt-1 text-sm text-[var(--pds-muted)]">
+          {{ bookerProdFile?.name }}
+        </p>
+      </div>
+      <div class="form-group">
+        <label class="pds-label">Ou choisir une prod des beatmakers (optionnel)</label>
+        <select v-model="selectedBeatId" class="pds-input" @change="handleBeatSelect">
+          <option value="">
+            Aucune
+          </option>
+          <option v-for="b in beats" :key="b.id" :value="b.id">
+            {{ b.title }} — {{ b.style }}{{ b.price ? ` (${b.price}€)` : '' }}
+          </option>
+        </select>
       </div>
     </div>
 
@@ -498,10 +442,10 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
     </p>
     <button
       class="btn-primary w-full"
-      :disabled="!canBook || sessionsLoading"
+      :disabled="!canBook || sessionsLoading || uploadingProd"
       @click="handleBook"
     >
-      Réserver ce créneau
+      {{ uploadingProd ? 'Envoi de la prod...' : 'Réserver ce créneau' }}
     </button>
 
     <!-- Liste des sessions -->

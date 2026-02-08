@@ -14,7 +14,7 @@ import {
   getFirestore,
 } from 'firebase/firestore'
 
-export type UserRole = 'booker' | 'inge' | 'beatmaker'
+export type UserRole = 'booker' | 'inge' | 'beatmaker' | 'admin'
 
 export interface AppUser {
   uid: string

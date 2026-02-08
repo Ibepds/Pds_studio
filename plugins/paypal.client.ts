@@ -7,7 +7,7 @@ declare global {
 let paypalLoaded = false
 let paypalPromise: Promise<any> | null = null
 
-export default defineNuxtPlugin(() => {
+export default defineNuxtPlugin((nuxtApp) => {
   const config = useRuntimeConfig()
   const clientId = config.public.paypalClientId
 
@@ -21,8 +21,8 @@ export default defineNuxtPlugin(() => {
     }
 
     paypalPromise = new Promise((resolve, reject) => {
-      if (!clientId) {
-        reject(new Error('PayPal client ID manquant'))
+      if (!clientId || typeof clientId !== 'string' || !clientId.trim()) {
+        reject(new Error('PayPal client ID manquant. Définir NUXT_PUBLIC_PAYPAL_CLIENT_ID dans .env et redémarrer le serveur.'))
         return
       }
 
@@ -42,11 +42,6 @@ export default defineNuxtPlugin(() => {
     return paypalPromise
   }
 
-  return {
-    provide: {
-      loadPaypal,
-      $loadPaypal: loadPaypal,
-    },
-  }
+  nuxtApp.provide('loadPaypal', loadPaypal)
 })
 
