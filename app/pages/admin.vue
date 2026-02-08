@@ -130,6 +130,13 @@ onMounted(async () => {
       <p v-if="adminError" class="text-sm text-red-400">
         {{ adminError }}
       </p>
+      <div class="pds-card">
+        <h3 class="pds-subtitle mb-3">
+          Calendrier semaine
+        </h3>
+        <WeekCalendar :sessions="sessions" />
+      </div>
+
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="pds-card">
           <h3 class="pds-subtitle mb-1">

@@ -174,6 +174,13 @@ const handleDeleteBeat = async (beatId: string) => {
       Espace beatmaker – prods & sessions
     </h2>
 
+    <div class="pds-card space-y-3">
+      <h3 class="pds-subtitle">
+        Calendrier semaine
+      </h3>
+      <WeekCalendar :sessions="sessions" />
+    </div>
+
     <div class="flex gap-2 border-b border-[var(--pds-border)] pb-2">
       <button
         type="button"

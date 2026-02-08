@@ -225,6 +225,13 @@ const handleFilesChange = async (e: Event) => {
 
     <div class="pds-card space-y-3">
       <h3 class="pds-subtitle">
+        Calendrier semaine
+      </h3>
+      <WeekCalendar :sessions="myUpcomingSessions" />
+    </div>
+
+    <div class="pds-card space-y-3">
+      <h3 class="pds-subtitle">
         Sessions à venir
       </h3>
       <div v-if="sessionsLoading" class="text-sm text-[var(--pds-muted)]">

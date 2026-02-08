@@ -33,6 +33,21 @@ const startHour = ref<number | null>(null)
 const style = ref<string>('Trap')
 const selectedBeatId = ref<string>('')
 const selectedBeatOwnerId = ref<string>('')
+
+/** Beats publics filtrés par le style choisi (pour le select) */
+const beatsFilteredByStyle = computed(() => {
+  const s = style.value?.trim().toLowerCase()
+  if (!s) return beats.value
+  return beats.value.filter((b) => (b.style ?? '').toLowerCase() === s)
+})
+
+watch(style, () => {
+  const stillInList = selectedBeatId.value && beatsFilteredByStyle.value.some((b) => b.id === selectedBeatId.value)
+  if (!stillInList) {
+    selectedBeatId.value = ''
+    selectedBeatOwnerId.value = ''
+  }
+})
 const bookerProdFile = ref<File | null>(null)
 const localError = ref<string | null>(null)
 const success = ref<string | null>(null)
@@ -397,10 +412,10 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
       </div>
     </div>
 
-    <!-- Style + prod -->
+    <!-- Filtre style puis prods (upload ou beat) -->
     <div class="pds-card space-y-4">
       <div class="form-group">
-        <label class="pds-label">Style musical</label>
+        <label class="pds-label">Filtrer par style</label>
         <select v-model="style" class="pds-input">
           <option value="Trap">Trap</option>
           <option value="Drill">Drill</option>
@@ -410,7 +425,21 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
         </select>
       </div>
       <div class="form-group">
-        <label class="pds-label">Uploader ma prod (optionnel)</label>
+        <label class="pds-label">Choisir une prod des beatmakers (optionnel)</label>
+        <select v-model="selectedBeatId" class="pds-input" @change="handleBeatSelect">
+          <option value="">
+            Aucune
+          </option>
+          <option v-for="b in beatsFilteredByStyle" :key="b.id" :value="b.id">
+            {{ b.title }} — {{ b.style }}{{ b.price ? ` (${b.price}€)` : '' }}
+          </option>
+        </select>
+        <p v-if="beatsFilteredByStyle.length === 0" class="mt-1 text-xs text-[var(--pds-muted)]">
+          Aucune prod publique pour ce style.
+        </p>
+      </div>
+      <div class="form-group">
+        <label class="pds-label">Ou uploader ma prod (optionnel)</label>
         <input
           type="file"
           accept="audio/*"
@@ -420,17 +449,6 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
         <p v-if="bookerProdFile" class="mt-1 text-sm text-[var(--pds-muted)]">
           {{ bookerProdFile?.name }}
         </p>
-      </div>
-      <div class="form-group">
-        <label class="pds-label">Ou choisir une prod des beatmakers (optionnel)</label>
-        <select v-model="selectedBeatId" class="pds-input" @change="handleBeatSelect">
-          <option value="">
-            Aucune
-          </option>
-          <option v-for="b in beats" :key="b.id" :value="b.id">
-            {{ b.title }} — {{ b.style }}{{ b.price ? ` (${b.price}€)` : '' }}
-          </option>
-        </select>
       </div>
     </div>
 
