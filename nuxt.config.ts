@@ -24,6 +24,21 @@ export default defineNuxtConfig({
       firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID,
 
       paypalClientId: process.env.NUXT_PUBLIC_PAYPAL_CLIENT_ID,
+
+      /** Email et téléphone admin pour afficher dans le client (notifications) */
+      adminNotifyEmail: process.env.NUXT_PUBLIC_ADMIN_NOTIFY_EMAIL || '',
+      adminNotifyPhone: process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',
     },
+    /** Clés privées (serveur uniquement) pour envoi mail / SMS */
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
+    twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
+    twilioFromPhone: process.env.TWILIO_FROM_PHONE || '',
+    adminEmail: process.env.ADMIN_EMAIL || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_EMAIL || '',
+    adminPhone: process.env.ADMIN_PHONE || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
+    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
+    googleCalendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
   },
 })

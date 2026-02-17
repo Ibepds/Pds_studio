@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { definePageMeta } from '#imports'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
@@ -6,8 +7,13 @@ import { useSessions } from '../../composables/useSessions'
 import { useUsers } from '../../composables/useUsers'
 
 const { currentUser } = useAuth()
-const { listAllFromDate } = useSessions()
+const { listAllFromDate, updateSessionRemainingToPay } = useSessions()
 const { listByRole, deleteUser } = useUsers()
+
+function restToPayForSession(s: any): number {
+  if (s.remainingToPay !== undefined && s.remainingToPay !== null) return s.remainingToPay
+  return Math.max(0, (s.totalPrice ?? 0) - (s.depositAmount ?? 0))
+}
 
 const sessions = ref<any[]>([])
 const ingeList = ref<any[]>([])
@@ -15,6 +21,22 @@ const beatmakerList = ref<any[]>([])
 const loading = ref(true)
 const deletingUid = ref<string | null>(null)
 const adminError = ref<string | null>(null)
+const markingPaidId = ref<string | null>(null)
+
+async function markFullyPaid(s: any) {
+  if (restToPayForSession(s) === 0) return
+  markingPaidId.value = s.id
+  adminError.value = null
+  try {
+    await updateSessionRemainingToPay(s.id, 0)
+    const updated = await listAllFromDate(firstDayOfMonth.value)
+    sessions.value = updated
+  } catch (e: any) {
+    adminError.value = e?.message ?? 'Erreur'
+  } finally {
+    markingPaidId.value = null
+  }
+}
 
 const firstDayOfMonth = computed(() => {
   const d = new Date()
@@ -33,9 +55,7 @@ const sessionsThisMonth = computed(() => {
 
 const restToPayTotal = computed(() => {
   return sessions.value.reduce((sum, s) => {
-    const total = s.totalPrice ?? 0
-    const deposit = s.depositAmount ?? 0
-    if (s.status === 'pending' || s.status === 'confirmed') return sum + Math.max(0, total - deposit)
+    if (s.status === 'pending' || s.status === 'confirmed') return sum + restToPayForSession(s)
     return sum
   }, 0)
 })
@@ -92,12 +112,13 @@ async function handleDeleteUser(uid: string, role: string) {
   }
 }
 
+definePageMeta({
+  middleware: 'require-auth',
+  role: 'admin',
+})
+
 const router = useRouter()
 onMounted(async () => {
-  if (currentUser.value?.role !== 'admin') {
-    await router.push('/')
-    return
-  }
   loading.value = true
   try {
     const [s, i, b] = await Promise.all([
@@ -194,6 +215,8 @@ onMounted(async () => {
                 <th class="p-2">Total</th>
                 <th class="p-2">Acompte</th>
                 <th class="p-2">Reste</th>
+                <th class="p-2">Récap mail</th>
+                <th class="p-2">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -209,20 +232,54 @@ onMounted(async () => {
                   <span
                     class="rounded-full px-2 py-0.5 text-xs"
                     :class="{
+                      'bg-red-500/20 text-red-300': s.status === 'waiting_payment',
                       'bg-amber-500/20 text-amber-300': s.status === 'pending',
                       'bg-emerald-500/20 text-emerald-300': s.status === 'confirmed',
                       'bg-slate-500/20 text-slate-300': s.status === 'done',
-                      'bg-red-500/20 text-red-300': s.status === 'cancelled',
+                      'bg-red-800/20 text-red-200': s.status === 'cancelled',
                     }"
                   >
-                    {{ s.status }}
+                    <template v-if="s.status === 'waiting_payment'">
+                      Attente paiement
+                    </template>
+                    <template v-else-if="s.status === 'pending'">
+                      En attente ingé
+                    </template>
+                    <template v-else-if="s.status === 'confirmed'">
+                      Confirmée
+                    </template>
+                    <template v-else-if="s.status === 'done'">
+                      Terminée
+                    </template>
+                    <template v-else-if="s.status === 'cancelled'">
+                      Annulée
+                    </template>
+                    <template v-else>
+                      {{ s.status }}
+                    </template>
                   </span>
                 </td>
                 <td class="p-2">{{ getIngeEmailForSession(s) }}</td>
                 <td class="p-2">{{ s.totalPrice ?? '—' }}€</td>
                 <td class="p-2">{{ s.depositAmount ?? '—' }}€</td>
                 <td class="p-2">
-                  {{ Math.max(0, (s.totalPrice ?? 0) - (s.depositAmount ?? 0)) }}€
+                  {{ restToPayForSession(s) }}€
+                </td>
+                <td class="p-2">
+                  <span v-if="s.recapSentAt" class="text-emerald-400">Oui</span>
+                  <span v-else class="text-[var(--pds-muted)]">Non</span>
+                </td>
+                <td class="p-2">
+                  <button
+                    v-if="(s.status === 'confirmed' || s.status === 'done') && restToPayForSession(s) > 0"
+                    type="button"
+                    class="btn-secondary !py-1 !px-2 !text-xs"
+                    :disabled="markingPaidId === s.id"
+                    @click="markFullyPaid(s)"
+                  >
+                    {{ markingPaidId === s.id ? '…' : 'Tout payé' }}
+                  </button>
+                  <span v-else-if="(s.status === 'confirmed' || s.status === 'done') && restToPayForSession(s) === 0" class="text-xs text-emerald-400">0€</span>
                 </td>
               </tr>
             </tbody>

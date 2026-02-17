@@ -73,3 +73,7 @@ bun run preview
 ```
 
 Check out the [deployment documentation](https://nuxt.com/docs/getting-started/deployment) for more information.
+
+## Notifications (optionnel)
+
+À la réservation : mail + SMS à l’admin et aux ingés concernés. À la confirmation ingé : mail récap au booker + événement Google Agenda. Env : `RESEND_API_KEY`, `TWILIO_*`, `ADMIN_EMAIL`/`ADMIN_PHONE`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`, `GOOGLE_CALENDAR_ID`. Champ `phone` sur les users (ingés) pour SMS.

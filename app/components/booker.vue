@@ -1,11 +1,18 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
 import { useSessions } from '../../composables/useSessions'
+import { useSessionFiles } from '../../composables/useSessionFiles'
+
+/** 'reserver' = formulaire uniquement, 'mes-sessions' = liste + PayPal uniquement, 'all' = tout (défaut) */
+const props = withDefaults(defineProps<{ mode?: 'reserver' | 'mes-sessions' | 'all' }>(), { mode: 'all' })
+const showReserver = computed(() => props.mode === 'reserver' || props.mode === 'all')
+const showMesSessions = computed(() => props.mode === 'mes-sessions' || props.mode === 'all')
 import { useBeats } from '../../composables/useBeats'
 import { useBookerProdUpload } from '../../composables/useBookerProdUpload'
 import { usePaypal } from '../../composables/usePaypal'
 import { useAuth } from '../../composables/useAuth'
-import { filterOutBookedSlots, type SessionBlock } from '../../composables/useAvailability'
+import { filterOutBookedSlots, slotOverlapsAny, useAvailability, type SessionBlock } from '../../composables/useAvailability'
+import { useUsers } from '../../composables/useUsers'
 import { getAvailableStartHours } from '../../utils/pricing'
 import {
   DURATION_OPTIONS,
@@ -23,6 +30,14 @@ const {
   loading: sessionsLoading,
   error: sessionsError,
 } = useSessions()
+const {
+  files: sessionFiles,
+  loading: filesLoading,
+  error: filesError,
+  listForSession,
+} = useSessionFiles()
+const { listByRole: listUsersByRole } = useUsers()
+const { getSlotsForUsersOnDate } = useAvailability()
 const { listAllPublic, beats } = useBeats()
 const { upload: uploadBookerProd } = useBookerProdUpload()
 const { currentUser } = useAuth()
@@ -59,6 +74,24 @@ const loadingSlots = ref(false)
 
 const paypalError = ref<string | null>(null)
 const paypalRenderedFor = ref<string | null>(null)
+
+// Fichiers livrés par l'ingé pour une session (consultables dans "Mes réservations")
+const filesSessionId = ref<string | null>(null)
+const filesLocalError = ref<string | null>(null)
+
+async function toggleFilesForSession(sessionId: string) {
+  filesLocalError.value = null
+  if (filesSessionId.value === sessionId) {
+    filesSessionId.value = null
+    return
+  }
+  filesSessionId.value = sessionId
+  try {
+    await listForSession(sessionId)
+  } catch (e: any) {
+    filesLocalError.value = e?.message ?? 'Erreur lors du chargement des fichiers de la session.'
+  }
+}
 
 onMounted(() => {
   listAllPublic()
@@ -107,6 +140,9 @@ async function loadAvailableSlots() {
   }
   loadingSlots.value = true
   try {
+    const inges = await listUsersByRole('inge')
+    const ingeIds = inges.map((i) => i.uid)
+    const unavailMap = ingeIds.length > 0 ? await getSlotsForUsersOnDate(ingeIds, d) : new Map<string, { start: string; end: string }[]>()
     const hours = getAvailableStartHours(dur)
     const booked = await listSessionsForDate(d)
     const blocks: SessionBlock[] = booked.map((s) => ({
@@ -114,7 +150,14 @@ async function loadAvailableSlots() {
       startTime: s.startTime,
       endTime: s.endTime,
     }))
-    availableStartHoursList.value = filterOutBookedSlots(hours, d, dur, blocks)
+    let available = filterOutBookedSlots(hours, d, dur, blocks)
+    if (ingeIds.length > 0) {
+      available = available.filter((h) => {
+        const slot = { start: formatHour(h), end: formatHour(h + dur) }
+        return ingeIds.some((uid) => !slotOverlapsAny(slot, unavailMap.get(uid) ?? []))
+      })
+    }
+    availableStartHoursList.value = available
     if (startHour.value != null && !availableStartHoursList.value.includes(startHour.value)) {
       startHour.value = null
     }
@@ -221,6 +264,33 @@ const handleBook = async () => {
       totalPrice: totalPrice.value,
       depositAmount: depositAmount.value,
     })
+    try {
+      const inges = await listUsersByRole('inge')
+      const ingeIds = inges.map((i) => i.uid)
+      const unavailMap = ingeIds.length > 0 ? await getSlotsForUsersOnDate(ingeIds, date.value) : new Map()
+      const sessionSlot = { start: startTime, end: endTime }
+      const concerned = inges.filter((i) => !slotOverlapsAny(sessionSlot, unavailMap.get(i.uid) ?? []))
+      const recipientEmails = concerned.map((i) => i.email).filter(Boolean) as string[]
+      const recipientPhones = concerned.map((i) => i.phone).filter(Boolean) as string[]
+      await $fetch('/api/notify-booking', {
+        method: 'POST',
+        body: {
+          session: {
+            date: date.value,
+            startTime,
+            endTime,
+            bookerEmail: currentUser.value?.email ?? null,
+            style: style.value,
+            durationHours: durationHours.value,
+            totalPrice: totalPrice.value,
+          },
+          recipientEmails,
+          recipientPhones,
+        },
+      })
+    } catch (e) {
+      console.error('Notify booking', e)
+    }
     success.value = 'Session réservée. Payer l’acompte ci‑dessous.'
     durationHours.value = null
     date.value = ''
@@ -256,9 +326,9 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
       onApprove: async (data: any, actions: any) => {
         await actions.order.capture()
         const orderId = data?.orderID
-        success.value = 'Paiement PayPal effectué, la session est confirmée.'
+        success.value = 'Paiement PayPal effectué, en attente de confirmation ingé.'
         try {
-          await updateSessionStatus(sessionId, 'confirmed', orderId)
+          await updateSessionStatus(sessionId, 'pending', orderId)
         } catch (e) {
           console.error(e)
         }
@@ -274,10 +344,17 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
 }
 
 const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPrice ?? 50) * 0.3)
+
+/** Reste à payer : valeur stockée ou calculée (total - acompte). */
+function restToPayForSession(s: any): number {
+  if (s.remainingToPay !== undefined && s.remainingToPay !== null) return s.remainingToPay
+  return Math.max(0, (s.totalPrice ?? 0) - (s.depositAmount ?? 0))
+}
 </script>
 
 <template>
   <div class="space-y-8">
+    <template v-if="showReserver">
     <h2 class="pds-h2">
       Réserver une session
     </h2>
@@ -465,9 +542,13 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
     >
       {{ uploadingProd ? 'Envoi de la prod...' : 'Réserver ce créneau' }}
     </button>
+    </template>
 
     <!-- Liste des sessions -->
-    <div class="space-y-4">
+    <div v-if="showMesSessions" class="space-y-4">
+      <h2 class="pds-h2">
+        Mes réservations
+      </h2>
       <h3 class="pds-subtitle">
         Tes prochaines sessions
       </h3>
@@ -490,7 +571,7 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
             <div
               v-for="s in sessionsForDay"
               :key="s.id"
-              class="rounded-lg border border-[var(--pds-border)] bg-[var(--pds-bg)] p-3"
+              class="rounded-lg border border-[var(--pds-border)] bg-[var(--pds-bg)] p-3 space-y-2"
             >
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div>
@@ -501,16 +582,47 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
                 <span
                   class="rounded-full px-2 py-0.5 text-xs"
                   :class="{
+                    'bg-red-500/20 text-red-300': s.status === 'waiting_payment',
                     'bg-amber-500/20 text-amber-300': s.status === 'pending',
                     'bg-emerald-500/20 text-emerald-300': s.status === 'confirmed',
                     'bg-slate-500/20 text-slate-300': s.status === 'done',
-                    'bg-red-500/20 text-red-300': s.status === 'cancelled',
+                    'bg-red-800/20 text-red-200': s.status === 'cancelled',
                   }"
                 >
-                  {{ s.status }}
+                  <template v-if="s.status === 'waiting_payment'">
+                    Attente paiement
+                  </template>
+                  <template v-else-if="s.status === 'pending'">
+                    En attente ingé
+                  </template>
+                  <template v-else-if="s.status === 'confirmed'">
+                    Confirmée
+                  </template>
+                  <template v-else-if="s.status === 'done'">
+                    Terminée
+                  </template>
+                  <template v-else-if="s.status === 'cancelled'">
+                    Annulée
+                  </template>
+                  <template v-else>
+                    {{ s.status }}
+                  </template>
                 </span>
               </div>
-              <div v-if="s.status === 'pending'" class="mt-3 border-t border-[var(--pds-border)] pt-3">
+              <!-- Récap envoyé + reste à payer (sessions confirmées / terminées) -->
+              <div
+                v-if="s.status === 'confirmed' || s.status === 'done'"
+                class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-[var(--pds-muted)]"
+              >
+                <span v-if="s.recapSentAt" class="rounded bg-emerald-500/20 px-2 py-0.5 text-emerald-300">
+                  Un récap a été envoyé par mail
+                </span>
+                <span>
+                  Reste à payer : <strong class="text-[var(--pds-text)]">{{ restToPayForSession(s) }}€</strong>
+                </span>
+              </div>
+              <!-- Bloc paiement -->
+              <div v-if="s.status === 'waiting_payment'" class="mt-3 border-t border-[var(--pds-border)] pt-3">
                 <p class="mb-2 text-xs text-[var(--pds-muted)]">
                   Payer l’acompte ({{ depositForSession(s) }}€) avec PayPal
                 </p>
@@ -525,6 +637,87 @@ const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPric
                 <p v-if="paypalError" class="mt-1 text-xs text-red-400">
                   {{ paypalError }}
                 </p>
+              </div>
+              <!-- Bloc fichiers / prods de la session pour le booker -->
+              <div
+                v-if="s.status === 'confirmed' || s.status === 'done'"
+                class="mt-2 border-t border-[var(--pds-border)] pt-2 space-y-2"
+              >
+                <div class="flex flex-wrap items-center justify-between gap-2">
+                  <p class="text-xs text-[var(--pds-muted)]">
+                    Fichiers de la session (prod + exports ingé)
+                  </p>
+                  <button
+                    type="button"
+                    class="btn-secondary !py-1.5 !px-3 !text-xs"
+                    @click="toggleFilesForSession(s.id)"
+                  >
+                    {{ filesSessionId === s.id ? 'Masquer les fichiers' : 'Voir les fichiers' }}
+                  </button>
+                </div>
+                <div v-if="filesSessionId === s.id" class="space-y-1">
+                  <!-- Prod fournie à la réservation -->
+                  <div v-if="s.bookerProdUrl || s.beatTitle" class="rounded border border-[var(--pds-border)] bg-[var(--pds-bg)] px-3 py-2">
+                    <p class="text-xs font-medium text-[var(--pds-text)]">
+                      Prod de la session
+                    </p>
+                    <p v-if="s.beatTitle" class="text-xs text-[var(--pds-muted)]">
+                      Beat sélectionné : {{ s.beatTitle }}
+                    </p>
+                    <p v-if="s.bookerProdFileName" class="text-xs text-[var(--pds-muted)]">
+                      Fichier uploadé : {{ s.bookerProdFileName }}
+                    </p>
+                    <a
+                      v-if="s.bookerProdUrl"
+                      :href="s.bookerProdUrl"
+                      target="_blank"
+                      rel="noreferrer"
+                      class="mt-1 inline-flex text-xs text-[var(--pds-primary)] hover:underline"
+                    >
+                      Télécharger / écouter la prod
+                    </a>
+                  </div>
+
+                  <!-- Fichiers rendus par l'ingé -->
+                  <div class="rounded border border-[var(--pds-border)] bg-[var(--pds-bg)] px-3 py-2">
+                    <p class="text-xs font-medium text-[var(--pds-text)]">
+                      Fichiers rendus par l’ingé
+                    </p>
+                    <p v-if="filesLocalError || filesError" class="mt-1 text-xs text-red-400">
+                      {{ filesLocalError || filesError }}
+                    </p>
+                    <p v-else-if="filesLoading" class="mt-1 text-xs text-[var(--pds-muted)]">
+                      Chargement des fichiers...
+                    </p>
+                    <p v-else-if="sessionFiles.length === 0" class="mt-1 text-xs text-[var(--pds-muted)]">
+                      Aucun fichier disponible pour l’instant.
+                    </p>
+                    <ul v-else class="mt-1 space-y-1 text-xs">
+                      <li
+                        v-for="f in sessionFiles"
+                        :key="f.id"
+                        class="flex items-center justify-between gap-2 rounded bg-[var(--pds-card)] px-2 py-1"
+                      >
+                        <div class="min-w-0">
+                          <p class="truncate text-[var(--pds-text)]">
+                            {{ f.fileName }}
+                          </p>
+                          <a
+                            :href="f.url"
+                            target="_blank"
+                            rel="noreferrer"
+                            class="text-[10px] text-[var(--pds-primary)] hover:underline"
+                          >
+                            Télécharger / ouvrir
+                          </a>
+                        </div>
+                        <span class="shrink-0 text-[10px] text-[var(--pds-muted)]">
+                          {{ f.createdAt.toLocaleDateString() }}
+                        </span>
+                      </li>
+                    </ul>
+                  </div>
+                </div>
               </div>
             </div>
           </div>

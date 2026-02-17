@@ -1,6 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useSessions } from '../../composables/useSessions'
+
+/** Afficher uniquement certaines sections (pour les pages par feature) */
+const props = withDefaults(
+  defineProps<{ mode?: 'calendrier' | 'prods' | 'disponibilites' | 'sessions' | 'all' }>(),
+  { mode: 'all' },
+)
+const showCalendrier = computed(() => props.mode === 'calendrier' || props.mode === 'all')
+const showProds = computed(() => props.mode === 'prods' || props.mode === 'all')
+const showDisponibilites = computed(() => props.mode === 'disponibilites' || props.mode === 'all')
+const showSessions = computed(() => props.mode === 'sessions' || props.mode === 'all')
 import { useBeats } from '../../composables/useBeats'
 import { useAvailability } from '../../composables/useAvailability'
 import { SLOT_START_HOUR, SLOT_END_HOUR } from '../../utils/pricing'
@@ -170,18 +180,18 @@ const handleDeleteBeat = async (beatId: string) => {
 
 <template>
   <div class="space-y-6">
-    <h2 class="pds-h2">
+    <h2 v-if="mode === 'all'" class="pds-h2">
       Espace beatmaker – prods & sessions
     </h2>
 
-    <div class="pds-card space-y-3">
+    <div v-if="showCalendrier" class="pds-card space-y-3">
       <h3 class="pds-subtitle">
         Calendrier semaine
       </h3>
       <WeekCalendar :sessions="sessions" />
     </div>
 
-    <div class="flex gap-2 border-b border-[var(--pds-border)] pb-2">
+    <div v-if="showProds" class="flex gap-2 border-b border-[var(--pds-border)] pb-2">
       <button
         type="button"
         class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors"
@@ -201,7 +211,7 @@ const handleDeleteBeat = async (beatId: string) => {
     </div>
 
     <!-- Mes disponibilités -->
-    <div class="pds-card space-y-4">
+    <div v-if="showDisponibilites" class="pds-card space-y-4">
       <h3 class="pds-subtitle">
         Mes disponibilités
       </h3>
@@ -265,6 +275,7 @@ const handleDeleteBeat = async (beatId: string) => {
       </div>
     </div>
 
+    <template v-if="showProds">
     <template v-if="beatmakerTab === 'list'">
       <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
         <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -430,8 +441,9 @@ const handleDeleteBeat = async (beatId: string) => {
         </div>
       </div>
     </template>
+    </template>
 
-    <div class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
+    <div v-if="showSessions" class="space-y-3 rounded-2xl border border-slate-800 bg-slate-900/70 p-4">
       <h3 class="text-xs font-semibold uppercase tracking-wide text-slate-300">
         Sessions avec tes prods
       </h3>

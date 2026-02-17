@@ -14,7 +14,12 @@ import { computed } from 'vue'
 import { getApps, initializeApp } from 'firebase/app'
 import { useAuth, type AppUser } from './useAuth'
 
-export type SessionStatus = 'pending' | 'confirmed' | 'done' | 'cancelled'
+export type SessionStatus =
+  | 'waiting_payment' // réservation créée mais acompte non payé
+  | 'pending' // acompte payé, en attente de confirmation ingé
+  | 'confirmed'
+  | 'done'
+  | 'cancelled'
 
 export interface Session {
   id: string
@@ -35,6 +40,10 @@ export interface Session {
   durationHours?: number
   totalPrice?: number
   depositAmount?: number
+  /** Si défini, le récap a été envoyé par mail à cette date */
+  recapSentAt?: Date | null
+  /** Montant restant à payer (€). Si défini, on l'affiche ; sinon on calcule totalPrice - depositAmount. Mettre à 0 quand tout est payé. */
+  remainingToPay?: number | null
   createdAt: Date
 }
 
@@ -55,6 +64,32 @@ const getDb = () => {
   }
 
   return getFirestore()
+}
+
+function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
+  return {
+    id,
+    bookerId: raw.bookerId as string,
+    bookerEmail: (raw.bookerEmail as string | null) ?? null,
+    date: raw.date as string,
+    startTime: raw.startTime as string,
+    endTime: raw.endTime as string,
+    style: (raw.style as string) ?? '',
+    beatId: raw.beatId as string | undefined,
+    beatTitle: raw.beatTitle as string | undefined,
+    beatmakerId: raw.beatmakerId as string | undefined,
+    ingeId: raw.ingeId as string | undefined,
+    bookerProdUrl: raw.bookerProdUrl as string | undefined,
+    bookerProdFileName: raw.bookerProdFileName as string | undefined,
+    status: (raw.status as SessionStatus | undefined) ?? 'waiting_payment',
+    paypalOrderId: raw.paypalOrderId as string | undefined,
+    durationHours: raw.durationHours as number | undefined,
+    totalPrice: raw.totalPrice as number | undefined,
+    depositAmount: raw.depositAmount as number | undefined,
+    recapSentAt: (raw.recapSentAt as Timestamp | undefined)?.toDate?.() ?? (raw.recapSentAt as Date | undefined) ?? null,
+    remainingToPay: raw.remainingToPay !== undefined ? (raw.remainingToPay as number) : undefined,
+    createdAt: (raw.createdAt as Timestamp | undefined)?.toDate?.() ?? new Date(),
+  }
 }
 
 export const useSessions = () => {
@@ -83,27 +118,7 @@ export const useSessions = () => {
       const data: Session[] = []
       snap.forEach((d) => {
         const raw = d.data() as any
-        data.push({
-          id: d.id,
-          bookerId: raw.bookerId,
-          bookerEmail: raw.bookerEmail ?? null,
-          date: raw.date,
-          startTime: raw.startTime,
-          endTime: raw.endTime,
-          style: raw.style ?? '',
-          beatId: raw.beatId,
-          beatTitle: raw.beatTitle,
-          beatmakerId: raw.beatmakerId,
-          ingeId: raw.ingeId,
-          bookerProdUrl: raw.bookerProdUrl,
-          bookerProdFileName: raw.bookerProdFileName,
-          status: raw.status ?? 'pending',
-          paypalOrderId: raw.paypalOrderId,
-          durationHours: raw.durationHours,
-          totalPrice: raw.totalPrice,
-          depositAmount: raw.depositAmount,
-          createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-        })
+        data.push(parseSessionDoc(d.id, raw))
       })
       data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
       sessions.value = data
@@ -124,28 +139,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      const raw = d.data() as any
-      data.push({
-        id: d.id,
-        bookerId: raw.bookerId,
-        bookerEmail: raw.bookerEmail ?? null,
-        date: raw.date,
-        startTime: raw.startTime,
-        endTime: raw.endTime,
-        style: raw.style ?? '',
-        beatId: raw.beatId,
-        beatTitle: raw.beatTitle,
-        beatmakerId: raw.beatmakerId,
-        ingeId: raw.ingeId,
-        bookerProdUrl: raw.bookerProdUrl,
-        bookerProdFileName: raw.bookerProdFileName,
-        status: raw.status ?? 'pending',
-        paypalOrderId: raw.paypalOrderId,
-        durationHours: raw.durationHours,
-        totalPrice: raw.totalPrice,
-        depositAmount: raw.depositAmount,
-        createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-      })
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
     })
     data.sort((a, b) => (a.startTime < b.startTime ? -1 : a.startTime > b.startTime ? 1 : 0))
     return data
@@ -169,28 +163,7 @@ export const useSessions = () => {
 
       const data: Session[] = []
       snap.forEach((d) => {
-        const raw = d.data() as any
-        data.push({
-          id: d.id,
-          bookerId: raw.bookerId,
-          bookerEmail: raw.bookerEmail ?? null,
-          date: raw.date,
-          startTime: raw.startTime,
-          endTime: raw.endTime,
-          style: raw.style ?? '',
-          beatId: raw.beatId,
-          beatTitle: raw.beatTitle,
-          beatmakerId: raw.beatmakerId,
-          ingeId: raw.ingeId,
-          bookerProdUrl: raw.bookerProdUrl,
-          bookerProdFileName: raw.bookerProdFileName,
-          status: raw.status ?? 'pending',
-          paypalOrderId: raw.paypalOrderId,
-          durationHours: raw.durationHours,
-          totalPrice: raw.totalPrice,
-          depositAmount: raw.depositAmount,
-          createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-        })
+        data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
       })
       data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
       sessions.value = data
@@ -229,7 +202,7 @@ export const useSessions = () => {
         bookerId: user.uid,
         bookerEmail: user.email ?? null,
         ...payload,
-        status: 'pending',
+        status: 'waiting_payment',
         createdAt: new Date(),
       }
       const data = Object.fromEntries(
@@ -250,8 +223,9 @@ export const useSessions = () => {
     const map: Record<string, Session[]> = {}
     for (const s of sessions.value) {
       if (!s || !s.date) continue
-      if (!map[s.date]) map[s.date] = []
-      map[s.date].push(s)
+      const key = s.date
+      if (!map[key]) map[key] = []
+      map[key]!.push(s)
     }
     return map
   })
@@ -276,28 +250,7 @@ export const useSessions = () => {
 
       const data: Session[] = []
       snap.forEach((d) => {
-        const raw = d.data() as any
-        data.push({
-          id: d.id,
-          bookerId: raw.bookerId,
-          bookerEmail: raw.bookerEmail ?? null,
-          date: raw.date,
-          startTime: raw.startTime,
-          endTime: raw.endTime,
-          style: raw.style ?? '',
-          beatId: raw.beatId,
-          beatTitle: raw.beatTitle,
-          beatmakerId: raw.beatmakerId,
-          ingeId: raw.ingeId,
-          bookerProdUrl: raw.bookerProdUrl,
-          bookerProdFileName: raw.bookerProdFileName,
-          status: raw.status ?? 'pending',
-          paypalOrderId: raw.paypalOrderId,
-          durationHours: raw.durationHours,
-          totalPrice: raw.totalPrice,
-          depositAmount: raw.depositAmount,
-          createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-        })
+        data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
       })
 
       sessions.value = data
@@ -317,28 +270,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      const raw = d.data() as any
-      data.push({
-        id: d.id,
-        bookerId: raw.bookerId,
-        bookerEmail: raw.bookerEmail ?? null,
-        date: raw.date,
-        startTime: raw.startTime,
-        endTime: raw.endTime,
-        style: raw.style ?? '',
-        beatId: raw.beatId,
-        beatTitle: raw.beatTitle,
-        beatmakerId: raw.beatmakerId,
-        ingeId: raw.ingeId,
-        bookerProdUrl: raw.bookerProdUrl,
-        bookerProdFileName: raw.bookerProdFileName,
-        status: raw.status ?? 'pending',
-        paypalOrderId: raw.paypalOrderId,
-        durationHours: raw.durationHours,
-        totalPrice: raw.totalPrice,
-        depositAmount: raw.depositAmount,
-        createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-      })
+      data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
     })
     data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     return data
@@ -354,28 +286,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      const raw = d.data() as any
-      data.push({
-        id: d.id,
-        bookerId: raw.bookerId,
-        bookerEmail: raw.bookerEmail ?? null,
-        date: raw.date,
-        startTime: raw.startTime,
-        endTime: raw.endTime,
-        style: raw.style ?? '',
-        beatId: raw.beatId,
-        beatTitle: raw.beatTitle,
-        beatmakerId: raw.beatmakerId,
-        ingeId: raw.ingeId,
-        bookerProdUrl: raw.bookerProdUrl,
-        bookerProdFileName: raw.bookerProdFileName,
-        status: raw.status ?? 'pending',
-        paypalOrderId: raw.paypalOrderId,
-        durationHours: raw.durationHours,
-        totalPrice: raw.totalPrice,
-        depositAmount: raw.depositAmount,
-        createdAt: (raw.createdAt as Timestamp | undefined)?.toDate() ?? new Date(),
-      })
+      data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
     })
     const pending = data.filter((s) => s.status === 'pending')
     pending.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
@@ -400,6 +311,24 @@ export const useSessions = () => {
     await listForCurrentBooker()
   }
 
+  /** Marque qu'un récap a été envoyé par mail (appelé après envoi du mail de récap). L'appelant doit rafraîchir sa liste (listForCurrentBooker / listAllFromDate). */
+  const updateSessionRecapSent = async (sessionId: string) => {
+    const db = getDb()
+    if (!db) return
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      recapSentAt: new Date(),
+    })
+  }
+
+  /** Met à jour le reste à payer (0 = tout payé). Admin et ingé peuvent marquer la session comme entièrement payée. L'appelant doit rafraîchir sa liste. */
+  const updateSessionRemainingToPay = async (sessionId: string, remainingToPay: number) => {
+    const db = getDb()
+    if (!db) return
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      remainingToPay: Math.max(0, remainingToPay),
+    })
+  }
+
   return {
     sessions,
     loading,
@@ -413,6 +342,8 @@ export const useSessions = () => {
     listAllFromDate,
     bookSession,
     updateSessionStatus,
+    updateSessionRecapSent,
+    updateSessionRemainingToPay,
   }
 }
 

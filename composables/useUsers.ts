@@ -6,6 +6,8 @@ export interface AppUserPublic {
   uid: string
   email: string | null
   role: UserRole
+  /** Numéro pour notifications SMS (ingé / admin) */
+  phone?: string | null
 }
 
 const getDb = () => {
@@ -41,11 +43,12 @@ export const useUsers = () => {
       const snap = await getDocs(q)
       const list: AppUserPublic[] = []
       snap.forEach((d) => {
-        const data = d.data() as { email?: string; role?: UserRole }
+        const data = d.data() as { email?: string; role?: UserRole; phone?: string }
         list.push({
           uid: d.id,
           email: data.email ?? null,
           role: (data.role ?? role) as UserRole,
+          phone: data.phone ?? null,
         })
       })
       return list

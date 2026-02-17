@@ -49,6 +49,13 @@ async function handleLogout() {
           >
             Admin
           </NuxtLink>
+          <NuxtLink
+            v-if="currentUser && (currentUser.role === 'booker' || currentUser.role === 'inge' || currentUser.role === 'beatmaker')"
+            :to="`/dashboard/${currentUser.role}`"
+            class="nav-link"
+          >
+            Tableau de bord
+          </NuxtLink>
           <template v-if="currentUser">
             <span class="nav-user" :title="userLabel ?? ''">{{ userLabel }}</span>
             <button type="button" class="btn-secondary !py-2 !px-4 !text-sm" @click="handleLogout">
@@ -93,6 +100,14 @@ async function handleLogout() {
             @click="closeNav"
           >
             Admin
+          </NuxtLink>
+          <NuxtLink
+            v-if="currentUser && (currentUser.role === 'booker' || currentUser.role === 'inge' || currentUser.role === 'beatmaker')"
+            :to="`/dashboard/${currentUser.role}`"
+            class="nav-link-mobile"
+            @click="closeNav"
+          >
+            Tableau de bord
           </NuxtLink>
           <template v-if="currentUser">
             <span class="text-sm text-[var(--pds-muted)] truncate px-3 py-2">{{ userLabel }}</span>
