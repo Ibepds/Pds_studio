@@ -29,6 +29,8 @@ export interface Session {
   startTime: string // HH:mm
   endTime: string // HH:mm
   style: string
+  /** Nom libre donné par le booker pour identifier la réservation */
+  reservationName?: string
   beatId?: string
   beatTitle?: string
   beatmakerId?: string
@@ -75,6 +77,7 @@ function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
     startTime: raw.startTime as string,
     endTime: raw.endTime as string,
     style: (raw.style as string) ?? '',
+    reservationName: raw.reservationName as string | undefined,
     beatId: raw.beatId as string | undefined,
     beatTitle: raw.beatTitle as string | undefined,
     beatmakerId: raw.beatmakerId as string | undefined,
@@ -179,6 +182,7 @@ export const useSessions = () => {
     startTime: string
     endTime: string
     style: string
+    reservationName?: string
     beatId?: string
     beatTitle?: string
     beatmakerId?: string

@@ -7,7 +7,6 @@ import { useSessionFiles } from '../../composables/useSessionFiles'
 const props = withDefaults(defineProps<{ mode?: 'reserver' | 'mes-sessions' | 'all' }>(), { mode: 'all' })
 const showReserver = computed(() => props.mode === 'reserver' || props.mode === 'all')
 const showMesSessions = computed(() => props.mode === 'mes-sessions' || props.mode === 'all')
-import { useBeats } from '../../composables/useBeats'
 import { useBookerProdUpload } from '../../composables/useBookerProdUpload'
 import { usePaypal } from '../../composables/usePaypal'
 import { useAuth } from '../../composables/useAuth'
@@ -38,31 +37,14 @@ const {
 } = useSessionFiles()
 const { listByRole: listUsersByRole } = useUsers()
 const { getSlotsForUsersOnDate } = useAvailability()
-const { listAllPublic, beats } = useBeats()
 const { upload: uploadBookerProd } = useBookerProdUpload()
 const { currentUser } = useAuth()
 
 const durationHours = ref<number | null>(null)
 const date = ref<string>('')
 const startHour = ref<number | null>(null)
-const style = ref<string>('Trap')
-const selectedBeatId = ref<string>('')
-const selectedBeatOwnerId = ref<string>('')
+const reservationName = ref<string>('')
 
-/** Beats publics filtrés par le style choisi (pour le select) */
-const beatsFilteredByStyle = computed(() => {
-  const s = style.value?.trim().toLowerCase()
-  if (!s) return beats.value
-  return beats.value.filter((b) => (b.style ?? '').toLowerCase() === s)
-})
-
-watch(style, () => {
-  const stillInList = selectedBeatId.value && beatsFilteredByStyle.value.some((b) => b.id === selectedBeatId.value)
-  if (!stillInList) {
-    selectedBeatId.value = ''
-    selectedBeatOwnerId.value = ''
-  }
-})
 const bookerProdFile = ref<File | null>(null)
 const localError = ref<string | null>(null)
 const success = ref<string | null>(null)
@@ -93,10 +75,6 @@ async function toggleFilesForSession(sessionId: string) {
   }
 }
 
-onMounted(() => {
-  listAllPublic()
-})
-
 watch(
   () => currentUser.value?.uid,
   (uid) => {
@@ -124,6 +102,7 @@ const summaryTimeRange = computed(() => {
 const canBook = computed(
   () =>
     !!(
+      reservationName.value.trim() &&
       date.value &&
       durationHours.value &&
       startHour.value != null &&
@@ -220,11 +199,6 @@ function handleBookerProdFileChange(e: Event) {
   const input = e.target as HTMLInputElement
   const f = input.files?.[0]
   bookerProdFile.value = f || null
-  if (f) selectedBeatId.value = ''
-}
-
-function handleBeatSelect() {
-  bookerProdFile.value = null
 }
 
 const handleBook = async () => {
@@ -247,17 +221,14 @@ const handleBook = async () => {
         uploadingProd.value = false
       }
     }
-    const selectedBeat = selectedBeatId.value ? beats.value.find((b) => b.id === selectedBeatId.value) : null
     const startTime = formatHour(startHour.value!)
     const endTime = formatHour(startHour.value! + durationHours.value!)
     await bookSession({
       date: date.value,
       startTime,
       endTime,
-      style: style.value,
-      beatId: selectedBeat?.id,
-      beatTitle: selectedBeat?.title,
-      beatmakerId: selectedBeat?.ownerId,
+      style: '',
+      reservationName: reservationName.value.trim(),
       bookerProdUrl,
       bookerProdFileName,
       durationHours: durationHours.value!,
@@ -280,7 +251,7 @@ const handleBook = async () => {
             startTime,
             endTime,
             bookerEmail: currentUser.value?.email ?? null,
-            style: style.value,
+            style: '',
             durationHours: durationHours.value,
             totalPrice: totalPrice.value,
           },
@@ -292,11 +263,10 @@ const handleBook = async () => {
       console.error('Notify booking', e)
     }
     success.value = 'Session réservée. Payer l’acompte ci‑dessous.'
+    reservationName.value = ''
     durationHours.value = null
     date.value = ''
     startHour.value = null
-    selectedBeatId.value = ''
-    selectedBeatOwnerId.value = ''
     bookerProdFile.value = null
     await listForCurrentBooker()
   } catch (e: any) {
@@ -358,6 +328,19 @@ function restToPayForSession(s: any): number {
     <h2 class="pds-h2">
       Réserver une session
     </h2>
+
+    <!-- Nom de la réservation -->
+    <div>
+      <h3 class="pds-subtitle mb-2">
+        Nom de la réservation
+      </h3>
+      <input
+        v-model="reservationName"
+        type="text"
+        class="pds-input w-full max-w-md"
+        placeholder="Exemple : Session EP, Mix single, etc."
+      >
+    </div>
 
     <!-- Tarifs -->
     <div class="pds-card">
@@ -468,6 +451,10 @@ function restToPayForSession(s: any): number {
     <!-- Résumé -->
     <div v-if="canBook" class="pds-summary">
       <div class="pds-summary-line">
+        <span>Nom</span>
+        <strong>{{ reservationName }}</strong>
+      </div>
+      <div class="pds-summary-line">
         <span>Date</span>
         <strong>{{ selectedDate?.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) }}</strong>
       </div>
@@ -489,34 +476,10 @@ function restToPayForSession(s: any): number {
       </div>
     </div>
 
-    <!-- Filtre style puis prods (upload ou beat) -->
+    <!-- Upload prod (optionnel) -->
     <div class="pds-card space-y-4">
       <div class="form-group">
-        <label class="pds-label">Filtrer par style</label>
-        <select v-model="style" class="pds-input">
-          <option value="Trap">Trap</option>
-          <option value="Drill">Drill</option>
-          <option value="Afro">Afro</option>
-          <option value="RnB">RnB</option>
-          <option value="Boom Bap">Boom Bap</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label class="pds-label">Choisir une prod des beatmakers (optionnel)</label>
-        <select v-model="selectedBeatId" class="pds-input" @change="handleBeatSelect">
-          <option value="">
-            Aucune
-          </option>
-          <option v-for="b in beatsFilteredByStyle" :key="b.id" :value="b.id">
-            {{ b.title }} — {{ b.style }}{{ b.price ? ` (${b.price}€)` : '' }}
-          </option>
-        </select>
-        <p v-if="beatsFilteredByStyle.length === 0" class="mt-1 text-xs text-[var(--pds-muted)]">
-          Aucune prod publique pour ce style.
-        </p>
-      </div>
-      <div class="form-group">
-        <label class="pds-label">Ou uploader ma prod (optionnel)</label>
+        <label class="pds-label">Uploader ma prod (optionnel)</label>
         <input
           type="file"
           accept="audio/*"
@@ -576,7 +539,8 @@ function restToPayForSession(s: any): number {
               <div class="flex flex-wrap items-center justify-between gap-2">
                 <div>
                   <span class="font-medium">{{ s.startTime }} – {{ s.endTime }}</span>
-                  <span class="ml-2 rounded bg-[var(--pds-border)] px-2 py-0.5 text-xs">{{ s.style }}</span>
+                  <span v-if="s.style" class="ml-2 rounded bg-[var(--pds-border)] px-2 py-0.5 text-xs">{{ s.style }}</span>
+                  <span v-if="s.reservationName" class="ml-2 text-xs text-[var(--pds-muted)]">« {{ s.reservationName }} »</span>
                   <span v-if="s.totalPrice" class="ml-2 text-sm text-[var(--pds-muted)]">{{ s.totalPrice }}€</span>
                 </div>
                 <span
