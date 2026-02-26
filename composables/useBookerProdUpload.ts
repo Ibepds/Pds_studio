@@ -24,12 +24,35 @@ export const useBookerProdUpload = () => {
 
   const upload = async (file: File): Promise<{ url: string; fileName: string }> => {
     const storage = getStorageInstance()
+    if (!storage) throw new Error('Storage non disponible')
+
     const user = currentUser.value
-    if (!storage || !user) throw new Error('Non connecté')
+
+    // 🔥 CAS INVITÉ
+    if (!user) {
+      const alreadyUploaded = sessionStorage.getItem('guestUploadDone')
+      if (alreadyUploaded) {
+        throw new Error('Upload déjà effectué pour cette session')
+      }
+
+      const path = `guestUploads/${Date.now()}_${file.name}`
+      const storageRef = ref(storage, path)
+
+      await uploadBytes(storageRef, file)
+      const url = await getDownloadURL(storageRef)
+
+      sessionStorage.setItem('guestUploadDone', 'true')
+
+      return { url, fileName: file.name }
+    }
+
+    // 🔥 CAS UTILISATEUR CONNECTÉ
     const path = `bookerProds/${user.uid}/${Date.now()}_${file.name}`
     const storageRef = ref(storage, path)
+
     await uploadBytes(storageRef, file)
     const url = await getDownloadURL(storageRef)
+
     return { url, fileName: file.name }
   }
 

@@ -8,7 +8,7 @@
     </p>
 
     <NuxtLink
-      to="/login?role=booker"
+      to="/reserver"
       class="btn-primary mb-4 w-full text-center"
     >
       Réserver en tant qu'invité

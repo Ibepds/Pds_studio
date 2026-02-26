@@ -6,6 +6,7 @@ import {
   type User,
   getAuth,
   onAuthStateChanged,
+  sendEmailVerification,
 } from 'firebase/auth'
 import {
   doc,
@@ -123,6 +124,12 @@ export const useAuth = () => {
         role,
         createdAt: new Date(),
       })
+
+      try {
+        await sendEmailVerification(cred.user)
+      } catch (e) {
+        console.error('[auth] sendEmailVerification error', e)
+      }
 
       await fetchUserProfile(cred.user)
       return cred

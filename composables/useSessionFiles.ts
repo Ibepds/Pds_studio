@@ -94,14 +94,23 @@ export const useSessionFiles = () => {
       const url = await getDownloadURL(fileRef)
 
       const col = collection(db, 'sessionFiles')
-      await addDoc(col, {
+      const createdAt = new Date()
+      const docRef = await addDoc(col, {
         sessionId,
         fileName: file.name,
         url,
-        createdAt: new Date(),
+        createdAt,
       })
 
       await listForSession(sessionId)
+
+      return {
+        id: docRef.id,
+        sessionId,
+        fileName: file.name,
+        url,
+        createdAt,
+      }
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors de l’upload'
       throw e

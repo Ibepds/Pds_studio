@@ -4,6 +4,8 @@
  * L’appelant doit ensuite appeler updateSessionRecapSent(sessionId).
  * Variables d’environnement : RESEND_API_KEY
  */
+import { Resend } from 'resend';
+
 interface SendRecapBody {
   session: {
     id: string
@@ -24,19 +26,14 @@ function restToPay(s: SendRecapBody['session']): number {
 
 async function sendEmail(resendApiKey: string, to: string, subject: string, html: string) {
   if (!resendApiKey) return
-  await $fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'PDS Studio <onboarding@resend.dev>',
-      to: [to],
-      subject,
-      html,
-    }),
-  })
+  const resend = new Resend(resendApiKey);
+  const response = await resend.emails.send({
+    from: 'PDS Studio <onboarding@resend.dev>',
+    to: [to],
+    subject: subject,
+    html: html,
+  });
+  return response;
 }
 
 export default defineEventHandler(async (event) => {

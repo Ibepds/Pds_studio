@@ -44,6 +44,7 @@ const durationHours = ref<number | null>(null)
 const date = ref<string>('')
 const startHour = ref<number | null>(null)
 const reservationName = ref<string>('')
+const contactEmail = ref<string>('')
 
 const bookerProdFile = ref<File | null>(null)
 const localError = ref<string | null>(null)
@@ -99,16 +100,18 @@ const summaryTimeRange = computed(() => {
   return `${startHour.value}h – ${end}h`
 })
 
-const canBook = computed(
-  () =>
-    !!(
-      reservationName.value.trim() &&
-      date.value &&
-      durationHours.value &&
-      startHour.value != null &&
-      totalPrice.value > 0
-    ),
-)
+const canBook = computed(() => {
+  const hasCoreFields =
+    reservationName.value.trim() &&
+    date.value &&
+    durationHours.value &&
+    startHour.value != null &&
+    totalPrice.value > 0
+
+  const email = contactEmail.value.trim() || currentUser.value?.email
+
+  return !!(hasCoreFields && email)
+})
 
 async function loadAvailableSlots() {
   const d = date.value
@@ -201,11 +204,21 @@ function handleBookerProdFileChange(e: Event) {
   bookerProdFile.value = f || null
 }
 
+watch(
+  () => currentUser.value?.email,
+  (email) => {
+    if (email) {
+      contactEmail.value = email
+    }
+  },
+  { immediate: true },
+)
+
 const handleBook = async () => {
   localError.value = null
   success.value = null
   if (!canBook.value) {
-    localError.value = 'Choisis la durée, la date et l’heure.'
+    localError.value = 'Renseigne ton email, la durée, la date et l’heure.'
     return
   }
   try {
@@ -223,6 +236,8 @@ const handleBook = async () => {
     }
     const startTime = formatHour(startHour.value!)
     const endTime = formatHour(startHour.value! + durationHours.value!)
+    const email = (contactEmail.value.trim() || currentUser.value?.email || '').trim()
+
     await bookSession({
       date: date.value,
       startTime,
@@ -234,6 +249,7 @@ const handleBook = async () => {
       durationHours: durationHours.value!,
       totalPrice: totalPrice.value,
       depositAmount: depositAmount.value,
+      contactEmail: email || undefined,
     })
     try {
       const inges = await listUsersByRole('inge')
@@ -250,7 +266,7 @@ const handleBook = async () => {
             date: date.value,
             startTime,
             endTime,
-            bookerEmail: currentUser.value?.email ?? null,
+            bookerEmail: email || null,
             style: '',
             durationHours: durationHours.value,
             totalPrice: totalPrice.value,
@@ -261,6 +277,25 @@ const handleBook = async () => {
       })
     } catch (e) {
       console.error('Notify booking', e)
+    }
+
+    if (email) {
+      try {
+        await $fetch('/api/send-booking-confirmation', {
+          method: 'POST',
+          body: {
+            session: {
+              bookerEmail: email,
+              date: date.value,
+              startTime,
+              endTime,
+              durationHours: durationHours.value,
+            },
+          },
+        })
+      } catch (e) {
+        console.error('Send booking confirmation', e)
+      }
     }
     success.value = 'Session réservée. Payer l’acompte ci‑dessous.'
     reservationName.value = ''
@@ -340,6 +375,23 @@ function restToPayForSession(s: any): number {
         class="pds-input w-full max-w-md"
         placeholder="Exemple : Session EP, Mix single, etc."
       >
+    </div>
+
+    <!-- Email de contact -->
+    <div class="mt-4">
+      <h3 class="pds-subtitle mb-2">
+        Ton email
+      </h3>
+      <input
+        v-model="contactEmail"
+        type="email"
+        class="pds-input w-full max-w-md"
+        :disabled="!!currentUser?.email"
+        placeholder="ton.email@example.com"
+      >
+      <p class="mt-1 text-xs text-[var(--pds-muted)]">
+        Nous utiliserons cet email pour t’envoyer la confirmation, le récap et les pistes livrées par l’ingé.
+      </p>
     </div>
 
     <!-- Tarifs -->

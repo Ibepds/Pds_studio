@@ -49,7 +49,30 @@ const handleFilesChange = async (e: Event) => {
   uploadError.value = null
   uploadSuccess.value = null
   try {
-    await uploadForSession(selectedSessionId.value, file)
+    const created = await uploadForSession(selectedSessionId.value, file)
+    const session = sessions.value.find((s) => s.id === selectedSessionId.value)
+    const toEmail = session?.bookerEmail ?? null
+    if (created && toEmail) {
+      try {
+        await $fetch('/api/send-session-file', {
+          method: 'POST',
+          body: {
+            toEmail,
+            session: {
+              date: session.date,
+              startTime: session.startTime,
+              endTime: session.endTime,
+            },
+            file: {
+              fileName: created.fileName,
+              url: created.url,
+            },
+          },
+        })
+      } catch (err) {
+        console.error('Send session file email', err)
+      }
+    }
     uploadSuccess.value = 'Fichier uploadé avec succès.'
   } catch (err: any) {
     uploadError.value = err?.message ?? 'Erreur lors de l’upload.'

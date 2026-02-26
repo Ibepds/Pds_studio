@@ -4,6 +4,7 @@
  * Variables d’environnement : RESEND_API_KEY, TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_PHONE, ADMIN_EMAIL, ADMIN_PHONE
  */
 import type { H3Event } from 'h3'
+import { Resend } from 'resend';
 
 interface NotifyBookingBody {
   session: {
@@ -23,20 +24,16 @@ interface NotifyBookingBody {
 
 async function sendEmail(resendApiKey: string, to: string, subject: string, html: string) {
   if (!resendApiKey) return
-  await $fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${resendApiKey}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      from: 'PDS Studio <onboarding@resend.dev>',
-      to: [to],
-      subject,
-      html,
-    }),
-  })
+  const resend = new Resend(resendApiKey);
+  const response = await resend.emails.send({
+    from: 'PDS Studio <onboarding@resend.dev>',
+    to: [to],
+    subject: subject,
+    html: html,
+  });
+  return response;
 }
+
 
 async function sendSms(
   accountSid: string,
@@ -45,20 +42,25 @@ async function sendSms(
   to: string,
   body: string,
 ) {
-  if (!accountSid || !authToken || !fromPhone) return
-  const auth = Buffer.from(`${accountSid}:${authToken}`).toString('base64')
-  await $fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
-    method: 'POST',
-    headers: {
-      Authorization: `Basic ${auth}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      To: to,
-      From: fromPhone,
-      Body: body,
-    }),
-  })
+  const config = useRuntimeConfig()
+  if (!accountSid || !authToken || !fromPhone || !config.twilioServiceSid) return
+  const twilio = require("twilio");
+  const client = twilio(accountSid, authToken);
+
+  const service = await client.messaging.v1
+    .services(config.twilioServiceSid as string)
+    .fetch();
+
+  console.log(service.sid);
+ 
+  const message = await service.sendMessage({
+    body: body,
+    messagingServiceSid: service.sid,
+    from: fromPhone,
+    to: to,
+  });
+  console.log(message);
+  return message.sid;
 }
 
 export default defineEventHandler(async (event: H3Event) => {

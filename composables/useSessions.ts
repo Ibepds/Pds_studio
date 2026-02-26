@@ -192,10 +192,22 @@ export const useSessions = () => {
     durationHours?: number
     totalPrice?: number
     depositAmount?: number
+    /** Email de contact saisi dans le formulaire (permet la réservation en invité) */
+    contactEmail?: string
   }) => {
     const db = getDb()
     const user = currentUser.value as AppUser | null
-    if (!db || !user) throw new Error('Utilisateur non connecté')
+    if (!db) throw new Error('Firestore non initialisé')
+
+    const contactEmail = (payload.contactEmail || user?.email || null) as string | null
+    const bookerId =
+      user?.uid ||
+      (contactEmail
+        ? `guest:${contactEmail}`
+        : `guest:${Date.now()}`)
+
+    // On ne persiste pas contactEmail en double, on le mappe vers bookerEmail
+    const { contactEmail: _contactEmail, ...restPayload } = payload
 
     loading.value = true
     error.value = null
@@ -203,9 +215,9 @@ export const useSessions = () => {
     try {
       const col = collection(db, 'sessions')
       const raw: Record<string, unknown> = {
-        bookerId: user.uid,
-        bookerEmail: user.email ?? null,
-        ...payload,
+        bookerId,
+        bookerEmail: contactEmail,
+        ...restPayload,
         status: 'waiting_payment',
         createdAt: new Date(),
       }
@@ -214,7 +226,10 @@ export const useSessions = () => {
       ) as Record<string, unknown>
       await addDoc(col, data)
 
-      await listForCurrentBooker()
+      // Si un booker est connecté, on rafraîchit sa liste
+      if (user) {
+        await listForCurrentBooker()
+      }
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors de la réservation'
       throw e
