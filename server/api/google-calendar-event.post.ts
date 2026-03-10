@@ -1,8 +1,17 @@
 /**
- * Crée un événement sur un Google Calendar (agenda) quand une session est confirmée.
- * Config : GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN, GOOGLE_CALENDAR_ID (optionnel, défaut "primary")
- * Pour obtenir le refresh token : flux OAuth2 "offline" avec scope https://www.googleapis.com/auth/calendar.events
+ * Crée un événement sur un Google Calendar quand une session est confirmée.
+ * Utilise le client officiel Google APIs Node.js avec un Service Account (pas de refresh token).
+ *
+ * Config (au choix) :
+ *   A) GOOGLE_APPLICATION_CREDENTIALS = chemin vers le fichier JSON du compte de service
+ *   B) GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (clé privée en base64 ou avec \n)
+ *   + GOOGLE_CALENDAR_ID = ID de l’agenda (partagé avec l’email du compte de service)
+ *
+ * Dans Google Cloud : créer un compte de service, télécharger le JSON.
+ * Dans Google Calendar : partager l’agenda cible avec l’email du compte de service (« Gérer les événements »).
  */
+import { google } from 'googleapis'
+
 interface CalendarEventBody {
   session: {
     date: string
@@ -13,28 +22,39 @@ interface CalendarEventBody {
   }
 }
 
-async function getAccessToken(clientId: string, clientSecret: string, refreshToken: string): Promise<string> {
-  const res = await $fetch<{ access_token: string }>('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  })
-  return res.access_token
+function getCalendarAuth(config: ReturnType<typeof useRuntimeConfig>) {
+  const keyFile = (config.googleApplicationCredentials as string)?.trim()
+  const email = (config.googleServiceAccountEmail as string)?.trim()
+  const privateKey = (config.googleServiceAccountPrivateKey as string)?.trim()
+
+  if (keyFile) {
+    return new google.auth.GoogleAuth({
+      keyFile,
+      scopes: ['https://www.googleapis.com/auth/calendar.events'],
+    })
+  }
+  if (email && privateKey) {
+    const key = privateKey.replace(/\\n/g, '\n')
+    return new google.auth.GoogleAuth({
+      credentials: { client_email: email, private_key: key },
+      scopes: ['https://www.googleapis.com/auth/calendar.events'],
+    })
+  }
+  return null
 }
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const clientId = config.googleClientId as string
-  const clientSecret = config.googleClientSecret as string
-  const refreshToken = config.googleRefreshToken as string
-  const calendarId = config.googleCalendarId as string
-  if (!clientId || !clientSecret || !refreshToken) {
-    return { ok: false, skipped: true, message: 'Google Calendar non configuré' }
+  const calendarId = ((config.googleCalendarId as string) || 'primary').trim()
+  const auth = getCalendarAuth(config)
+
+  if (!auth) {
+    return {
+      ok: false,
+      skipped: true,
+      message:
+        'Google Calendar non configuré : définir GOOGLE_APPLICATION_CREDENTIALS ou GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
+    }
   }
 
   const body = (await readBody(event)) as CalendarEventBody
@@ -53,23 +73,18 @@ export default defineEventHandler(async (event) => {
   const description = [s.style && `Style: ${s.style}`, s.bookerEmail && `Booker: ${s.bookerEmail}`].filter(Boolean).join('\n')
 
   try {
-    const accessToken = await getAccessToken(clientId, clientSecret, refreshToken)
-    await $fetch(
-      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
-      {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          summary,
-          description: description || undefined,
-          start: { dateTime: start.toISOString(), timeZone: 'Europe/Paris' },
-          end: { dateTime: end.toISOString(), timeZone: 'Europe/Paris' },
-        }),
+    const calendar = google.calendar({ version: 'v3', auth })
+
+    await calendar.events.insert({
+      calendarId,
+      requestBody: {
+        summary,
+        description: description || undefined,
+        start: { dateTime: start.toISOString(), timeZone: 'Europe/Paris' },
+        end: { dateTime: end.toISOString(), timeZone: 'Europe/Paris' },
       },
-    )
+    })
+
     return { ok: true }
   } catch (e) {
     console.error('[google-calendar-event]', e)
