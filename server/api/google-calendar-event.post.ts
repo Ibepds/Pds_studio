@@ -80,8 +80,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     const calendar = google.calendar({ version: 'v3', auth })
-
-    await calendar.events.insert({
+    console.log('calendar', calendar)
+    var res = await calendar.events.insert({
       calendarId,
       requestBody: {
         summary,
@@ -90,7 +90,8 @@ export default defineEventHandler(async (event) => {
         end: { dateTime: end.toISOString(), timeZone: 'Europe/Paris' },
       },
     })
-
+    console.log('calendar.events.insert done')
+    console.log('res', res)
     return { ok: true }
   } catch (e) {
     console.error('[google-calendar-event]', e)

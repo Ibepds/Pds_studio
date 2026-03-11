@@ -151,6 +151,26 @@ export const useSessions = () => {
     return data
   }
 
+  /** Sessions en attente de paiement pour un nom de réservation donné (pour les invités). */
+  const findUnpaidByReservationName = async (
+    reservationName: string,
+  ): Promise<Session[]> => {
+    const db = getDb()
+    if (!db) return []
+    const trimmed = reservationName.trim()
+    if (!trimmed) return []
+
+    const col = collection(db, 'sessions')
+    const q = query(col, where('reservationName', '==', trimmed))
+    const snap = await getDocs(q)
+    const data: Session[] = []
+    snap.forEach((d) => {
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
+    })
+    // On ne garde que les réservations en attente de paiement
+    return data.filter((s) => s.status === 'waiting_payment')
+  }
+
   // Sessions pour l'ingé son / beatmaker : pour l’instant, toutes les sessions à partir d’aujourd’hui
   const listAllUpcoming = async () => {
     const db = getDb()
@@ -371,6 +391,7 @@ export const useSessions = () => {
     listAllUpcoming,
     listForCurrentBeatmaker,
     listSessionsForDate,
+    findUnpaidByReservationName,
     listAllPending,
     listAllFromDate,
     bookSession,
