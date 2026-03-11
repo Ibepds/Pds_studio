@@ -7,8 +7,7 @@ let paypalPromise: Promise<any> | null = null
 
 export const usePaypal = (): (() => Promise<any>) => {
   if (!import.meta.client) {
-    return () =>
-      Promise.reject(new Error('PayPal disponible uniquement côté client.'))
+    return () => Promise.reject(new Error('PayPal disponible uniquement côté client.'))
   }
 
   return () => {

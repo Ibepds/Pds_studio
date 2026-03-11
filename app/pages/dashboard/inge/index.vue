@@ -8,7 +8,5 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="text-center text-sm text-[var(--pds-muted)] py-8">
-    Redirection...
-  </div>
+  <div class="text-center text-sm text-[var(--pds-muted)] py-8">Redirection...</div>
 </template>

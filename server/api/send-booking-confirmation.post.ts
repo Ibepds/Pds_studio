@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend } from 'resend'
 
 interface BookingConfirmationSession {
   bookerEmail: string
@@ -12,16 +12,27 @@ interface BookingConfirmationBody {
   session: BookingConfirmationSession
 }
 
+const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+/** Resend allows 2 requests/second; wait and retry once on 429. */
 async function sendEmail(resendApiKey: string, to: string, subject: string, html: string) {
   if (!resendApiKey) return
-  const resend = new Resend(resendApiKey);
-  const response = await resend.emails.send({
-    from: 'PDS Studio <onboarding@resend.dev>',
-    to: [to],
-    subject: subject,
-    html: html,
-  });
-  return response;
+  const resend = new Resend(resendApiKey)
+  const send = () =>
+    resend.emails.send({
+      from: 'PDS Studio <onboarding@resend.dev>',
+      to: [to],
+      subject: subject,
+      html: html,
+    })
+  let response = await send()
+  if ((response as { error?: { statusCode?: number }; headers?: Record<string, string> })?.error?.statusCode === 429) {
+    const retryAfter = (response as { headers?: Record<string, string> }).headers?.['retry-after']
+    await delay(Math.max(1000, parseInt(retryAfter || '1', 10) * 1000))
+    response = await send()
+  }
+  console.log('Booking confirmation response', response)
+  return response
 }
 
 function formatFrenchDate(dateStr: string): string {
@@ -47,6 +58,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const s = body.session
+  console.log('Booking confirmation', s)
+  console.log('Booking confirmation date', s.date)
+  console.log('Booking confirmation startTime', s.startTime)
+  console.log('Booking confirmation endTime', s.endTime)
   const dateLabel = formatFrenchDate(s.date)
   const hourLabel = formatHourRange(s.startTime, s.endTime)
 
@@ -79,4 +94,3 @@ export default defineEventHandler(async (event) => {
 
   return { ok: true }
 })
-

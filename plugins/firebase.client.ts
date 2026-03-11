@@ -1,17 +1,7 @@
 import { initializeApp, getApps, type FirebaseApp } from 'firebase/app'
-import {
-  getAuth,
-  type Auth,
-  onAuthStateChanged,
-} from 'firebase/auth'
-import {
-  getFirestore,
-  type Firestore,
-} from 'firebase/firestore'
-import {
-  getStorage,
-  type FirebaseStorage,
-} from 'firebase/storage'
+import { getAuth, type Auth, onAuthStateChanged } from 'firebase/auth'
+import { getFirestore, type Firestore } from 'firebase/firestore'
+import { getStorage, type FirebaseStorage } from 'firebase/storage'
 
 let firebaseApp: FirebaseApp | null = null
 let auth: Auth | null = null
@@ -52,4 +42,3 @@ export default defineNuxtPlugin(() => {
     },
   }
 })
-

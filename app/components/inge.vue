@@ -76,7 +76,20 @@ const availabilityCalendarDays = computed(() => {
 })
 
 const availabilityMonthLabel = computed(() => {
-  const months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const months = [
+    'Janvier',
+    'Février',
+    'Mars',
+    'Avril',
+    'Mai',
+    'Juin',
+    'Juillet',
+    'Août',
+    'Septembre',
+    'Octobre',
+    'Novembre',
+    'Décembre',
+  ]
   return `${months[availabilityMonth.value.getMonth()]} ${availabilityMonth.value.getFullYear()}`
 })
 
@@ -115,7 +128,10 @@ onMounted(async () => {
 })
 
 watch(availabilityDate, async (d) => {
-  if (!d) { slotsForSelectedDate.value = []; return }
+  if (!d) {
+    slotsForSelectedDate.value = []
+    return
+  }
   loadingSlots.value = true
   try {
     slotsForSelectedDate.value = await getMySlotsForDate(d)
@@ -127,10 +143,18 @@ watch(availabilityDate, async (d) => {
 })
 
 function prevAvailabilityMonth() {
-  availabilityMonth.value = new Date(availabilityMonth.value.getFullYear(), availabilityMonth.value.getMonth() - 1, 1)
+  availabilityMonth.value = new Date(
+    availabilityMonth.value.getFullYear(),
+    availabilityMonth.value.getMonth() - 1,
+    1,
+  )
 }
 function nextAvailabilityMonth() {
-  availabilityMonth.value = new Date(availabilityMonth.value.getFullYear(), availabilityMonth.value.getMonth() + 1, 1)
+  availabilityMonth.value = new Date(
+    availabilityMonth.value.getFullYear(),
+    availabilityMonth.value.getMonth() + 1,
+    1,
+  )
 }
 function selectAvailabilityDate(dateStr: string) {
   if (!dateStr) return
@@ -207,14 +231,10 @@ const handleFilesChange = async (e: Event) => {
 
 <template>
   <div class="space-y-6">
-    <h2 class="pds-h2">
-      Espace ingé son – sessions & pistes
-    </h2>
+    <h2 class="pds-h2">Espace ingé son – sessions & pistes</h2>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Sessions à confirmer (tes dispos correspondent)
-      </h3>
+      <h3 class="pds-subtitle">Sessions à confirmer (tes dispos correspondent)</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Ces réservations correspondent à tes créneaux. Confirme pour les valider.
       </p>
@@ -232,7 +252,9 @@ const handleFilesChange = async (e: Event) => {
         >
           <div>
             <p class="font-medium">{{ s.date }} • {{ s.startTime }} – {{ s.endTime }}</p>
-            <p class="text-xs text-[var(--pds-muted)]">{{ s.bookerEmail ?? s.bookerId }} · {{ s.style }}</p>
+            <p class="text-xs text-[var(--pds-muted)]">
+              {{ s.bookerEmail ?? s.bookerId }} · {{ s.style }}
+            </p>
           </div>
           <button
             type="button"
@@ -247,16 +269,12 @@ const handleFilesChange = async (e: Event) => {
     </div>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Calendrier semaine
-      </h3>
+      <h3 class="pds-subtitle">Calendrier semaine</h3>
       <WeekCalendar :sessions="myUpcomingSessions" />
     </div>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Sessions à venir
-      </h3>
+      <h3 class="pds-subtitle">Sessions à venir</h3>
       <div v-if="sessionsLoading" class="text-sm text-[var(--pds-muted)]">
         Chargement des sessions...
       </div>
@@ -301,19 +319,36 @@ const handleFilesChange = async (e: Event) => {
 
     <!-- Mes disponibilités -->
     <div class="pds-card space-y-4">
-      <h3 class="pds-subtitle">
-        Mes disponibilités
-      </h3>
+      <h3 class="pds-subtitle">Mes disponibilités</h3>
       <p class="text-sm text-[var(--pds-muted)]">
-        Choisis une date puis ajoute des créneaux (ex. 10h–14h). Les bookers ne verront que les dates où tu es dispo.
+        Choisis une date puis ajoute des créneaux (ex. 10h–14h). Les bookers ne verront que les
+        dates où tu es dispo.
       </p>
       <div class="flex items-center justify-between">
-        <button type="button" class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10" @click="prevAvailabilityMonth">‹</button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
+          @click="prevAvailabilityMonth"
+        >
+          ‹
+        </button>
         <span class="font-medium text-[var(--pds-text)]">{{ availabilityMonthLabel }}</span>
-        <button type="button" class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10" @click="nextAvailabilityMonth">›</button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
+          @click="nextAvailabilityMonth"
+        >
+          ›
+        </button>
       </div>
       <div class="grid grid-cols-7 gap-1 sm:gap-2">
-        <div v-for="(lab, di) in ['L','M','M','J','V','S','D']" :key="di" class="text-center text-xs text-[var(--pds-muted)]">{{ lab }}</div>
+        <div
+          v-for="(lab, di) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']"
+          :key="di"
+          class="text-center text-xs text-[var(--pds-muted)]"
+        >
+          {{ lab }}
+        </div>
         <button
           v-for="(cell, idx) in availabilityCalendarDays"
           :key="idx"
@@ -322,8 +357,10 @@ const handleFilesChange = async (e: Event) => {
           :class="{
             'border-transparent bg-transparent': cell.day == null,
             'cursor-not-allowed opacity-40': cell.disabled && cell.day != null,
-            'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white': availabilityDate === cell.dateStr,
-            'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]': cell.day != null && !cell.disabled && availabilityDate !== cell.dateStr
+            'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white':
+              availabilityDate === cell.dateStr,
+            'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]':
+              cell.day != null && !cell.disabled && availabilityDate !== cell.dateStr,
           }"
           :disabled="cell.day == null || cell.disabled"
           @click="selectAvailabilityDate(cell.dateStr)"
@@ -332,9 +369,7 @@ const handleFilesChange = async (e: Event) => {
         </button>
       </div>
       <div v-if="availabilityDate" class="border-t border-[var(--pds-border)] pt-4">
-        <p class="mb-2 text-sm text-[var(--pds-text)]">
-          Créneaux le {{ availabilityDate }}
-        </p>
+        <p class="mb-2 text-sm text-[var(--pds-text)]">Créneaux le {{ availabilityDate }}</p>
         <div v-if="loadingSlots" class="text-sm text-[var(--pds-muted)]">Chargement...</div>
         <template v-else>
           <div class="mb-3 flex flex-wrap items-center gap-2">
@@ -345,7 +380,9 @@ const handleFilesChange = async (e: Event) => {
             <select v-model.number="addSlotEnd" class="pds-input w-20">
               <option v-for="h in hourOptions" :key="h" :value="h">{{ h }}h</option>
             </select>
-            <button type="button" class="btn-primary !py-2 !px-3 !text-sm" @click="addSlot">Ajouter</button>
+            <button type="button" class="btn-primary !py-2 !px-3 !text-sm" @click="addSlot">
+              Ajouter
+            </button>
           </div>
           <ul class="mb-3 space-y-2">
             <li
@@ -354,10 +391,17 @@ const handleFilesChange = async (e: Event) => {
               class="flex items-center justify-between rounded-lg border border-[var(--pds-border)] bg-[var(--pds-bg)] px-3 py-2 text-sm"
             >
               <span>{{ slot.start }} – {{ slot.end }}</span>
-              <button type="button" class="text-red-400 hover:underline" @click="removeSlot(i)">Supprimer</button>
+              <button type="button" class="text-red-400 hover:underline" @click="removeSlot(i)">
+                Supprimer
+              </button>
             </li>
           </ul>
-          <button type="button" class="btn-primary !py-2 !px-3 !text-sm" :disabled="savingSlots" @click="saveSlots">
+          <button
+            type="button"
+            class="btn-primary !py-2 !px-3 !text-sm"
+            :disabled="savingSlots"
+            @click="saveSlots"
+          >
             {{ savingSlots ? 'Enregistrement...' : 'Enregistrer les créneaux' }}
           </button>
         </template>
@@ -365,9 +409,7 @@ const handleFilesChange = async (e: Event) => {
     </div>
 
     <div v-if="selectedSessionId" class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Pistes de la session
-      </h3>
+      <h3 class="pds-subtitle">Pistes de la session</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Session sélectionnée:
         <span class="font-medium text-[var(--pds-text)]">{{ selectedSessionLabel }}</span>
@@ -378,7 +420,7 @@ const handleFilesChange = async (e: Event) => {
           type="file"
           class="w-full text-sm text-[var(--pds-text)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--pds-primary)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:opacity-90"
           @change="handleFilesChange"
-        >
+        />
       </div>
       <p v-if="uploadError || filesError" class="text-sm text-red-400">
         {{ uploadError || filesError }}
@@ -388,12 +430,8 @@ const handleFilesChange = async (e: Event) => {
       </p>
       <div class="space-y-2">
         <div class="flex items-center justify-between">
-          <h4 class="pds-label mb-0">
-            Fichiers uploadés
-          </h4>
-          <span v-if="filesLoading" class="text-xs text-[var(--pds-muted)]">
-            Chargement...
-          </span>
+          <h4 class="pds-label mb-0">Fichiers uploadés</h4>
+          <span v-if="filesLoading" class="text-xs text-[var(--pds-muted)]"> Chargement... </span>
         </div>
         <div
           v-if="!filesLoading && sessionFiles.length === 0"
@@ -409,14 +447,14 @@ const handleFilesChange = async (e: Event) => {
           >
             <div class="space-y-0.5">
               <p class="font-medium text-slate-100">{{ f.fileName }}</p>
-                <a
-                  :href="f.url"
-                  target="_blank"
-                  rel="noreferrer"
-                  class="text-sm text-[var(--pds-primary)] hover:underline"
-                >
-                  Télécharger / ouvrir
-                </a>
+              <a
+                :href="f.url"
+                target="_blank"
+                rel="noreferrer"
+                class="text-sm text-[var(--pds-primary)] hover:underline"
+              >
+                Télécharger / ouvrir
+              </a>
             </div>
             <span class="text-xs text-[var(--pds-muted)]">
               {{ f.createdAt.toLocaleDateString() }}
@@ -425,8 +463,8 @@ const handleFilesChange = async (e: Event) => {
         </ul>
       </div>
       <p class="mt-2 text-xs text-[var(--pds-muted)]">
-        Plus tard, on déclenchera ici le paiement du reste avant de donner
-        l’accès définitif aux pistes.
+        Plus tard, on déclenchera ici le paiement du reste avant de donner l’accès définitif aux
+        pistes.
       </p>
     </div>
   </div>

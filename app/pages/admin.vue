@@ -90,13 +90,19 @@ const sessionsByInge = computed(() => {
     if (entry) entry.sessions.push(s)
   }
   for (const entry of Object.values(map)) {
-    entry.sessions.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+    entry.sessions.sort(
+      (a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime),
+    )
   }
   return map
 })
 
 async function handleDeleteUser(uid: string, role: string) {
-  if (!confirm(`Supprimer ce compte ${role} ? Il perdra son rôle et sera considéré comme booker à la prochaine connexion.`)) {
+  if (
+    !confirm(
+      `Supprimer ce compte ${role} ? Il perdra son rôle et sera considéré comme booker à la prochaine connexion.`,
+    )
+  ) {
     return
   }
   deletingUid.value = uid
@@ -137,14 +143,10 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-8">
-    <h1 class="pds-h2">
-      Admin
-    </h1>
+    <h1 class="pds-h2">Admin</h1>
 
     <div v-if="currentUser?.role !== 'admin'" class="pds-card">
-      <p class="text-red-400">
-        Accès réservé aux administrateurs.
-      </p>
+      <p class="text-red-400">Accès réservé aux administrateurs.</p>
     </div>
 
     <template v-else>
@@ -152,41 +154,27 @@ onMounted(async () => {
         {{ adminError }}
       </p>
       <div class="pds-card">
-        <h3 class="pds-subtitle mb-3">
-          Calendrier semaine
-        </h3>
+        <h3 class="pds-subtitle mb-3">Calendrier semaine</h3>
         <WeekCalendar :sessions="sessions" />
       </div>
 
       <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-1">
-            Reste à payer (total)
-          </h3>
-          <p class="text-2xl font-medium text-[var(--pds-primary)]">
-            {{ restToPayTotal }}€
-          </p>
+          <h3 class="pds-subtitle mb-1">Reste à payer (total)</h3>
+          <p class="text-2xl font-medium text-[var(--pds-primary)]">{{ restToPayTotal }}€</p>
         </div>
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-1">
-            Total du mois (confirmées / faites)
-          </h3>
-          <p class="text-2xl font-medium text-[var(--pds-primary)]">
-            {{ totalMoneyThisMonth }}€
-          </p>
+          <h3 class="pds-subtitle mb-1">Total du mois (confirmées / faites)</h3>
+          <p class="text-2xl font-medium text-[var(--pds-primary)]">{{ totalMoneyThisMonth }}€</p>
         </div>
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-1">
-            Sessions confirmées par un ingé
-          </h3>
+          <h3 class="pds-subtitle mb-1">Sessions confirmées par un ingé</h3>
           <p class="text-2xl font-medium text-[var(--pds-primary)]">
             {{ confirmedByIngeCount }}
           </p>
         </div>
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-1">
-            Sessions ce mois
-          </h3>
+          <h3 class="pds-subtitle mb-1">Sessions ce mois</h3>
           <p class="text-2xl font-medium text-[var(--pds-primary)]">
             {{ sessionsThisMonth.length }}
           </p>
@@ -194,12 +182,8 @@ onMounted(async () => {
       </div>
 
       <div class="pds-card">
-        <h3 class="pds-subtitle mb-4">
-          Toutes les sessions (à partir de ce mois)
-        </h3>
-        <div v-if="loading" class="text-sm text-[var(--pds-muted)]">
-          Chargement...
-        </div>
+        <h3 class="pds-subtitle mb-4">Toutes les sessions (à partir de ce mois)</h3>
+        <div v-if="loading" class="text-sm text-[var(--pds-muted)]">Chargement...</div>
         <div v-else-if="sessions.length === 0" class="text-sm text-[var(--pds-muted)]">
           Aucune session.
         </div>
@@ -220,11 +204,7 @@ onMounted(async () => {
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="s in sessions"
-                :key="s.id"
-                class="border-b border-[var(--pds-border)]"
-              >
+              <tr v-for="s in sessions" :key="s.id" class="border-b border-[var(--pds-border)]">
                 <td class="p-2">{{ s.date }}</td>
                 <td class="p-2">{{ s.startTime }} – {{ s.endTime }}</td>
                 <td class="p-2">{{ s.bookerEmail ?? s.bookerId }}</td>
@@ -239,21 +219,11 @@ onMounted(async () => {
                       'bg-red-800/20 text-red-200': s.status === 'cancelled',
                     }"
                   >
-                    <template v-if="s.status === 'waiting_payment'">
-                      Attente paiement
-                    </template>
-                    <template v-else-if="s.status === 'pending'">
-                      En attente ingé
-                    </template>
-                    <template v-else-if="s.status === 'confirmed'">
-                      Confirmée
-                    </template>
-                    <template v-else-if="s.status === 'done'">
-                      Terminée
-                    </template>
-                    <template v-else-if="s.status === 'cancelled'">
-                      Annulée
-                    </template>
+                    <template v-if="s.status === 'waiting_payment'"> Attente paiement </template>
+                    <template v-else-if="s.status === 'pending'"> En attente ingé </template>
+                    <template v-else-if="s.status === 'confirmed'"> Confirmée </template>
+                    <template v-else-if="s.status === 'done'"> Terminée </template>
+                    <template v-else-if="s.status === 'cancelled'"> Annulée </template>
                     <template v-else>
                       {{ s.status }}
                     </template>
@@ -262,16 +232,17 @@ onMounted(async () => {
                 <td class="p-2">{{ getIngeEmailForSession(s) }}</td>
                 <td class="p-2">{{ s.totalPrice ?? '—' }}€</td>
                 <td class="p-2">{{ s.depositAmount ?? '—' }}€</td>
-                <td class="p-2">
-                  {{ restToPayForSession(s) }}€
-                </td>
+                <td class="p-2">{{ restToPayForSession(s) }}€</td>
                 <td class="p-2">
                   <span v-if="s.recapSentAt" class="text-emerald-400">Oui</span>
                   <span v-else class="text-[var(--pds-muted)]">Non</span>
                 </td>
                 <td class="p-2">
                   <button
-                    v-if="(s.status === 'confirmed' || s.status === 'done') && restToPayForSession(s) > 0"
+                    v-if="
+                      (s.status === 'confirmed' || s.status === 'done') &&
+                      restToPayForSession(s) > 0
+                    "
                     type="button"
                     class="btn-secondary !py-1 !px-2 !text-xs"
                     :disabled="markingPaidId === s.id"
@@ -279,7 +250,14 @@ onMounted(async () => {
                   >
                     {{ markingPaidId === s.id ? '…' : 'Tout payé' }}
                   </button>
-                  <span v-else-if="(s.status === 'confirmed' || s.status === 'done') && restToPayForSession(s) === 0" class="text-xs text-emerald-400">0€</span>
+                  <span
+                    v-else-if="
+                      (s.status === 'confirmed' || s.status === 'done') &&
+                      restToPayForSession(s) === 0
+                    "
+                    class="text-xs text-emerald-400"
+                    >0€</span
+                  >
                 </td>
               </tr>
             </tbody>
@@ -288,10 +266,11 @@ onMounted(async () => {
       </div>
 
       <div class="pds-card">
-        <h3 class="pds-subtitle mb-4">
-          Sessions par ingé son
-        </h3>
-        <div v-if="Object.keys(sessionsByInge).length === 0" class="text-sm text-[var(--pds-muted)]">
+        <h3 class="pds-subtitle mb-4">Sessions par ingé son</h3>
+        <div
+          v-if="Object.keys(sessionsByInge).length === 0"
+          class="text-sm text-[var(--pds-muted)]"
+        >
           Aucune session confirmée par un ingé pour l’instant.
         </div>
         <div v-else class="space-y-4">
@@ -330,9 +309,7 @@ onMounted(async () => {
 
       <div class="grid gap-4 sm:grid-cols-2">
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-4">
-            Ingés son
-          </h3>
+          <h3 class="pds-subtitle mb-4">Ingés son</h3>
           <ul class="space-y-2 text-sm">
             <li v-for="u in ingeList" :key="u.uid" class="flex items-center justify-between gap-2">
               <span>{{ u.email ?? u.uid }}</span>
@@ -345,17 +322,17 @@ onMounted(async () => {
                 {{ deletingUid === u.uid ? '…' : 'Supprimer' }}
               </button>
             </li>
-            <li v-if="ingeList.length === 0" class="text-[var(--pds-muted)]">
-              Aucun
-            </li>
+            <li v-if="ingeList.length === 0" class="text-[var(--pds-muted)]">Aucun</li>
           </ul>
         </div>
         <div class="pds-card">
-          <h3 class="pds-subtitle mb-4">
-            Beatmakers
-          </h3>
+          <h3 class="pds-subtitle mb-4">Beatmakers</h3>
           <ul class="space-y-2 text-sm">
-            <li v-for="u in beatmakerList" :key="u.uid" class="flex items-center justify-between gap-2">
+            <li
+              v-for="u in beatmakerList"
+              :key="u.uid"
+              class="flex items-center justify-between gap-2"
+            >
               <span>{{ u.email ?? u.uid }}</span>
               <button
                 type="button"
@@ -366,9 +343,7 @@ onMounted(async () => {
                 {{ deletingUid === u.uid ? '…' : 'Supprimer' }}
               </button>
             </li>
-            <li v-if="beatmakerList.length === 0" class="text-[var(--pds-muted)]">
-              Aucun
-            </li>
+            <li v-if="beatmakerList.length === 0" class="text-[var(--pds-muted)]">Aucun</li>
           </ul>
         </div>
       </div>

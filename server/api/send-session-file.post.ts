@@ -1,4 +1,4 @@
-import { Resend } from 'resend';
+import { Resend } from 'resend'
 
 interface SendSessionFileBody {
   toEmail: string
@@ -15,14 +15,14 @@ interface SendSessionFileBody {
 
 async function sendEmail(resendApiKey: string, to: string, subject: string, html: string) {
   if (!resendApiKey) return
-  const resend = new Resend(resendApiKey);
+  const resend = new Resend(resendApiKey)
   const response = await resend.emails.send({
     from: 'PDS Studio <onboarding@resend.dev>',
     to: [to],
     subject: subject,
     html: html,
-  });
-  return response;
+  })
+  return response
 }
 
 function formatFrenchDateShort(dateStr: string): string {
@@ -74,4 +74,3 @@ export default defineEventHandler(async (event) => {
 
   return { ok: true }
 })
-

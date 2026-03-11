@@ -179,7 +179,10 @@ export const useBeats = () => {
     return unsubscribe
   }
 
-  const uploadBeat = async (file: File, meta: { title: string; style: string; bpm?: number; price?: number; isPublic: boolean }) => {
+  const uploadBeat = async (
+    file: File,
+    meta: { title: string; style: string; bpm?: number; price?: number; isPublic: boolean },
+  ) => {
     const { db, storage } = getClients()
     const user = currentUser.value as AppUser | null
     if (!db || !storage || !user) throw new Error('Utilisateur non connecté')
@@ -252,4 +255,3 @@ export const useBeats = () => {
     deleteBeat,
   }
 }
-

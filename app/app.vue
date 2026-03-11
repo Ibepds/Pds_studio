@@ -33,24 +33,33 @@ async function handleLogout() {
 <template>
   <div class="min-h-screen bg-[var(--pds-bg)] text-[var(--pds-text)] flex flex-col">
     <!-- Navbar -->
-    <header class="sticky top-0 z-50 border-b border-[var(--pds-border)] bg-[var(--pds-card)]/95 backdrop-blur-sm">
-      <nav class="mx-auto flex max-w-4xl w-full items-center justify-between gap-4 px-4 py-3 sm:px-6">
-        <NuxtLink to="/" class="text-xl font-light tracking-[0.2em] text-white shrink-0" @click="closeNav">
+    <header
+      class="sticky top-0 z-50 border-b border-[var(--pds-border)] bg-[var(--pds-card)]/95 backdrop-blur-sm"
+    >
+      <nav
+        class="mx-auto flex max-w-4xl w-full items-center justify-between gap-4 px-4 py-3 sm:px-6"
+      >
+        <NuxtLink
+          to="/"
+          class="text-xl font-light tracking-[0.2em] text-white shrink-0"
+          @click="closeNav"
+        >
           PDS
         </NuxtLink>
 
         <!-- Desktop: liens à droite -->
         <div class="hidden md:flex items-center gap-2">
           <NuxtLink to="/" class="nav-link">Accueil</NuxtLink>
-          <NuxtLink
-            v-if="currentUser?.role === 'admin'"
-            to="/admin"
-            class="nav-link"
-          >
+          <NuxtLink v-if="currentUser?.role === 'admin'" to="/admin" class="nav-link">
             Admin
           </NuxtLink>
           <NuxtLink
-            v-if="currentUser && (currentUser.role === 'booker' || currentUser.role === 'inge' || currentUser.role === 'beatmaker')"
+            v-if="
+              currentUser &&
+              (currentUser.role === 'booker' ||
+                currentUser.role === 'inge' ||
+                currentUser.role === 'beatmaker')
+            "
             :to="`/dashboard/${currentUser.role}`"
             class="nav-link"
           >
@@ -76,8 +85,20 @@ async function handleLogout() {
           @click="navOpen = !navOpen"
         >
           <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path v-if="!navOpen" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            <path v-else stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            <path
+              v-if="!navOpen"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"
+            />
+            <path
+              v-else
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />
           </svg>
         </button>
       </nav>
@@ -91,7 +112,10 @@ async function handleLogout() {
         leave-from-class="opacity-100 translate-y-0"
         leave-to-class="opacity-0 -translate-y-2"
       >
-        <div v-show="navOpen" class="md:hidden border-t border-[var(--pds-border)] bg-[var(--pds-card)] px-4 py-3 flex flex-col gap-2">
+        <div
+          v-show="navOpen"
+          class="md:hidden border-t border-[var(--pds-border)] bg-[var(--pds-card)] px-4 py-3 flex flex-col gap-2"
+        >
           <NuxtLink to="/" class="nav-link-mobile" @click="closeNav">Accueil</NuxtLink>
           <NuxtLink
             v-if="currentUser?.role === 'admin'"
@@ -102,7 +126,12 @@ async function handleLogout() {
             Admin
           </NuxtLink>
           <NuxtLink
-            v-if="currentUser && (currentUser.role === 'booker' || currentUser.role === 'inge' || currentUser.role === 'beatmaker')"
+            v-if="
+              currentUser &&
+              (currentUser.role === 'booker' ||
+                currentUser.role === 'inge' ||
+                currentUser.role === 'beatmaker')
+            "
             :to="`/dashboard/${currentUser.role}`"
             class="nav-link-mobile"
             @click="closeNav"
@@ -111,11 +140,18 @@ async function handleLogout() {
           </NuxtLink>
           <template v-if="currentUser">
             <span class="text-sm text-[var(--pds-muted)] truncate px-3 py-2">{{ userLabel }}</span>
-            <button type="button" class="nav-link-mobile text-left" @click="handleLogout">Déconnexion</button>
+            <button type="button" class="nav-link-mobile text-left" @click="handleLogout">
+              Déconnexion
+            </button>
           </template>
           <template v-else>
             <NuxtLink to="/login" class="nav-link-mobile" @click="closeNav">Se connecter</NuxtLink>
-            <NuxtLink to="/register" class="nav-link-mobile btn-primary !text-center" @click="closeNav">Inscription</NuxtLink>
+            <NuxtLink
+              to="/register"
+              class="nav-link-mobile btn-primary !text-center"
+              @click="closeNav"
+              >Inscription</NuxtLink
+            >
           </template>
         </div>
       </Transition>
@@ -131,16 +167,22 @@ async function handleLogout() {
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
           <div>
             <p class="text-lg font-light tracking-[0.15em] text-white">PDS Studio</p>
-            <p class="text-sm text-[var(--pds-muted)] mt-1">Réservation de studio • Ingé son & beatmakers</p>
+            <p class="text-sm text-[var(--pds-muted)] mt-1">
+              Réservation de studio • Ingé son & beatmakers
+            </p>
           </div>
           <div class="footer-contact">
-            <p class="text-xs uppercase tracking-wider text-[var(--pds-muted)] mb-2">Nous contacter</p>
+            <p class="text-xs uppercase tracking-wider text-[var(--pds-muted)] mb-2">
+              Nous contacter
+            </p>
             <a href="mailto:contact@pds-studio.com" class="footer-link">contact@pds-studio.com</a>
             <a href="tel:+33000000000" class="footer-link block mt-1">+33 (0)0 00 00 00 00</a>
             <p class="text-sm text-[var(--pds-muted2)] mt-2">Adresse du studio • Ville</p>
           </div>
         </div>
-        <p class="text-center sm:text-right text-xs text-[var(--pds-muted2)] mt-6 pt-4 border-t border-[var(--pds-border)]">
+        <p
+          class="text-center sm:text-right text-xs text-[var(--pds-muted2)] mt-6 pt-4 border-t border-[var(--pds-border)]"
+        >
           © {{ new Date().getFullYear() }} PDS Studio. Tous droits réservés.
         </p>
       </div>

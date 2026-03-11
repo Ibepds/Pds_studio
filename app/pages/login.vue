@@ -33,9 +33,7 @@ const roleFromQuery = computed(() => route.query.role as string | undefined)
 
 <template>
   <section class="pds-container">
-    <h2 class="pds-h2 mb-8 text-center">
-      Connexion
-    </h2>
+    <h2 class="pds-h2 mb-8 text-center">Connexion</h2>
     <p class="pds-subtitle mb-8 text-center">
       Identifie-toi pour accéder à ton espace
       <span v-if="roleFromQuery"> ({{ roleFromQuery }})</span>.
@@ -45,32 +43,16 @@ const roleFromQuery = computed(() => route.query.role as string | undefined)
       <form class="space-y-5" @submit.prevent="onSubmit">
         <div class="form-group">
           <label class="pds-label">Email</label>
-          <input
-            v-model="email"
-            type="email"
-            required
-            class="pds-input"
-          >
+          <input v-model="email" type="email" required class="pds-input" />
         </div>
         <div class="form-group">
           <label class="pds-label">Mot de passe</label>
-          <input
-            v-model="password"
-            type="password"
-            required
-            class="pds-input"
-          >
+          <input v-model="password" type="password" required class="pds-input" />
         </div>
         <p v-if="error" class="text-sm text-red-400">
           {{ error }}
         </p>
-        <button
-          type="submit"
-          class="btn-primary w-full"
-          :disabled="submitting"
-        >
-          Connexion
-        </button>
+        <button type="submit" class="btn-primary w-full" :disabled="submitting">Connexion</button>
       </form>
     </div>
 

@@ -51,7 +51,9 @@ const weekDays = computed(() => {
     d.setDate(m.getDate() + i)
     const dateStr = toDateStr(d)
     const dayNum = d.getDate()
-    const short = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][d.getDay() === 0 ? 6 : d.getDay() - 1]
+    const short = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'][
+      d.getDay() === 0 ? 6 : d.getDay() - 1
+    ]
     days.push({ date: d, dateStr, label: `${short} ${dayNum}` })
   }
   return days
@@ -61,7 +63,20 @@ const weekLabel = computed(() => {
   const m = weekStart.value
   const end = new Date(m)
   end.setDate(m.getDate() + 6)
-  const months = ['Janv', 'Fév', 'Mars', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sept', 'Oct', 'Nov', 'Déc']
+  const months = [
+    'Janv',
+    'Fév',
+    'Mars',
+    'Avr',
+    'Mai',
+    'Juin',
+    'Juil',
+    'Août',
+    'Sept',
+    'Oct',
+    'Nov',
+    'Déc',
+  ]
   if (m.getMonth() === end.getMonth()) {
     return `${months[m.getMonth()]} ${m.getFullYear()}`
   }
@@ -90,7 +105,11 @@ function timeToDecimal(t: string): number {
 }
 
 /** Grille: row 1 = header, rows 2..1+totalHours = heures. Col 1 = time, cols 2..8 = jours. */
-function sessionGridPlace(session: WeekCalendarSession): { gridColumn: number; gridRowStart: number; gridRowEnd: number } {
+function sessionGridPlace(session: WeekCalendarSession): {
+  gridColumn: number
+  gridRowStart: number
+  gridRowEnd: number
+} {
   const dayIndex = weekDateStrs.value.indexOf(session.date)
   if (dayIndex < 0) return { gridColumn: 2, gridRowStart: 2, gridRowEnd: 2 }
   const startDec = timeToDecimal(session.startTime)
@@ -152,7 +171,9 @@ function goToToday() {
       </div>
     </div>
 
-    <div class="week-calendar-grid overflow-x-auto rounded-lg border border-[var(--pds-border)] bg-[var(--pds-border)]">
+    <div
+      class="week-calendar-grid overflow-x-auto rounded-lg border border-[var(--pds-border)] bg-[var(--pds-border)]"
+    >
       <div
         class="week-calendar-inner"
         :style="{
@@ -162,13 +183,14 @@ function goToToday() {
           '--week-time-width': '56px',
           display: 'grid',
           gridTemplateColumns: 'var(--week-time-width) repeat(7, minmax(0, 1fr))',
-          gridTemplateRows: 'var(--week-header-height) repeat(var(--week-total-hours), var(--week-row-height))',
+          gridTemplateRows:
+            'var(--week-header-height) repeat(var(--week-total-hours), var(--week-row-height))',
           gridGap: '1px',
           minWidth: 'min(100%, 720px)',
         }"
       >
         <!-- Corner -->
-        <div class="week-cell-header bg-[var(--pds-bg)]" style="grid-column: 1; grid-row: 1;" />
+        <div class="week-cell-header bg-[var(--pds-bg)]" style="grid-column: 1; grid-row: 1" />
         <!-- Day headers (cols 2-8) -->
         <div
           v-for="(day, i) in weekDays"
@@ -210,7 +232,9 @@ function goToToday() {
           }"
         >
           <span class="font-medium">{{ s.startTime }} – {{ s.endTime }}</span>
-          <span class="truncate text-[9px] opacity-95">{{ s.bookerEmail ?? s.bookerId ?? '—' }}</span>
+          <span class="truncate text-[9px] opacity-95">{{
+            s.bookerEmail ?? s.bookerId ?? '—'
+          }}</span>
           <span v-if="s.style" class="truncate text-[9px] opacity-80">{{ s.style }}</span>
         </div>
       </div>

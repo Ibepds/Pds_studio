@@ -6,7 +6,7 @@ export default defineNuxtConfig({
   css: ['~~/assets/css/main.css'],
   app: {
     head: {
-      title: 'PDS — Studio d\'enregistrement',
+      title: "PDS — Studio d'enregistrement",
       meta: [
         { charset: 'utf-8' },
         { name: 'viewport', content: 'width=device-width, initial-scale=1' },
@@ -38,6 +38,7 @@ export default defineNuxtConfig({
     adminPhone: process.env.ADMIN_PHONE || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',
     googleClientId: process.env.GOOGLE_CLIENT_ID || '',
     googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
+    googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
     googleCalendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
     googleApiKey: process.env.GOOGLE_API_KEY || '',
   },

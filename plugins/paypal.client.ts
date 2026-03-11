@@ -22,7 +22,11 @@ export default defineNuxtPlugin((nuxtApp) => {
 
     paypalPromise = new Promise((resolve, reject) => {
       if (!clientId || typeof clientId !== 'string' || !clientId.trim()) {
-        reject(new Error('PayPal client ID manquant. Définir NUXT_PUBLIC_PAYPAL_CLIENT_ID dans .env et redémarrer le serveur.'))
+        reject(
+          new Error(
+            'PayPal client ID manquant. Définir NUXT_PUBLIC_PAYPAL_CLIENT_ID dans .env et redémarrer le serveur.',
+          ),
+        )
         return
       }
 
@@ -44,4 +48,3 @@ export default defineNuxtPlugin((nuxtApp) => {
 
   nuxtApp.provide('loadPaypal', loadPaypal)
 })
-

@@ -84,14 +84,10 @@ const handleFilesChange = async (e: Event) => {
 
 <template>
   <div class="space-y-6">
-    <h2 class="pds-h2">
-      Pistes des sessions
-    </h2>
+    <h2 class="pds-h2">Pistes des sessions</h2>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Choisir une session
-      </h3>
+      <h3 class="pds-subtitle">Choisir une session</h3>
       <div v-if="myUpcomingSessions.length === 0" class="text-sm text-[var(--pds-muted)]">
         Aucune session à venir. Confirme des sessions pour en voir la liste ici.
       </div>
@@ -115,9 +111,7 @@ const handleFilesChange = async (e: Event) => {
     </div>
 
     <div v-if="selectedSessionId" class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Fichiers de la session
-      </h3>
+      <h3 class="pds-subtitle">Fichiers de la session</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Session : <span class="font-medium text-[var(--pds-text)]">{{ selectedSessionLabel }}</span>
       </p>
@@ -127,7 +121,7 @@ const handleFilesChange = async (e: Event) => {
           type="file"
           class="w-full text-sm text-[var(--pds-text)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--pds-primary)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white hover:file:opacity-90"
           @change="handleFilesChange"
-        >
+        />
       </div>
       <p v-if="uploadError || filesError" class="text-sm text-red-400">
         {{ uploadError || filesError }}
@@ -136,9 +130,7 @@ const handleFilesChange = async (e: Event) => {
         {{ uploadSuccess }}
       </p>
       <div class="space-y-2">
-        <h4 class="pds-label mb-0">
-          Fichiers uploadés
-        </h4>
+        <h4 class="pds-label mb-0">Fichiers uploadés</h4>
         <span v-if="filesLoading" class="text-xs text-[var(--pds-muted)]">Chargement...</span>
         <div v-else-if="sessionFiles.length === 0" class="text-sm text-[var(--pds-muted)]">
           Aucun fichier pour cette session.
@@ -151,11 +143,18 @@ const handleFilesChange = async (e: Event) => {
           >
             <div>
               <p class="font-medium text-slate-100">{{ f.fileName }}</p>
-              <a :href="f.url" target="_blank" rel="noreferrer" class="text-sm text-[var(--pds-primary)] hover:underline">
+              <a
+                :href="f.url"
+                target="_blank"
+                rel="noreferrer"
+                class="text-sm text-[var(--pds-primary)] hover:underline"
+              >
                 Télécharger / ouvrir
               </a>
             </div>
-            <span class="text-xs text-[var(--pds-muted)]">{{ f.createdAt.toLocaleDateString() }}</span>
+            <span class="text-xs text-[var(--pds-muted)]">{{
+              f.createdAt.toLocaleDateString()
+            }}</span>
           </li>
         </ul>
       </div>

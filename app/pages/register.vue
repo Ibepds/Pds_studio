@@ -31,33 +31,18 @@ const onSubmit = async () => {
 
 <template>
   <section class="pds-container">
-    <h2 class="pds-h2 mb-8 text-center">
-      Inscription
-    </h2>
-    <p class="pds-subtitle mb-8 text-center">
-      Crée ton compte booker, ingé son ou beatmaker.
-    </p>
+    <h2 class="pds-h2 mb-8 text-center">Inscription</h2>
+    <p class="pds-subtitle mb-8 text-center">Crée ton compte booker, ingé son ou beatmaker.</p>
 
     <div class="pds-card mb-6">
       <form class="space-y-5" @submit.prevent="onSubmit">
         <div class="form-group">
           <label class="pds-label">Email</label>
-          <input
-            v-model="email"
-            type="email"
-            required
-            class="pds-input"
-          >
+          <input v-model="email" type="email" required class="pds-input" />
         </div>
         <div class="form-group">
           <label class="pds-label">Mot de passe</label>
-          <input
-            v-model="password"
-            type="password"
-            minlength="6"
-            required
-            class="pds-input"
-          >
+          <input v-model="password" type="password" minlength="6" required class="pds-input" />
         </div>
         <div class="form-group">
           <label class="pds-label">Rôle</label>
@@ -70,11 +55,7 @@ const onSubmit = async () => {
         <p v-if="error" class="text-sm text-red-400">
           {{ error }}
         </p>
-        <button
-          type="submit"
-          class="btn-primary w-full"
-          :disabled="submitting"
-        >
+        <button type="submit" class="btn-primary w-full" :disabled="submitting">
           Créer un compte
         </button>
       </form>

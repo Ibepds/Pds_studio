@@ -139,11 +139,7 @@ export const useAvailability = () => {
   const loading = ref(false)
   const error = ref<string | null>(null)
 
-  const setSlotsForDate = async (
-    date: string,
-    slots: TimeSlot[],
-    role: 'inge' | 'beatmaker',
-  ) => {
+  const setSlotsForDate = async (date: string, slots: TimeSlot[], role: 'inge' | 'beatmaker') => {
     const db = getDb()
     const user = currentUser.value
     if (!db || !user) throw new Error('Non connecté')
@@ -197,12 +193,12 @@ export const useAvailability = () => {
   }
 
   function normalizeSlot(s: { start?: string; end?: string }): TimeSlot | null {
-  if (!s || s.start == null || s.end == null) return null
-  const start = String(s.start).trim()
-  const end = String(s.end).trim()
-  if (!start || !end) return null
-  return { start, end }
-}
+    if (!s || s.start == null || s.end == null) return null
+    const start = String(s.start).trim()
+    const end = String(s.end).trim()
+    if (!start || !end) return null
+    return { start, end }
+  }
 
   /** Get slots for several users on one date (for Booker: intersection) */
   const getSlotsForUsersOnDate = async (

@@ -37,12 +37,28 @@ const availabilityCalendarDays = computed(() => {
 })
 
 const availabilityMonthLabel = computed(() => {
-  const months = ['Janvier', 'Février', 'Mars', 'Avril', 'Mai', 'Juin', 'Juillet', 'Août', 'Septembre', 'Octobre', 'Novembre', 'Décembre']
+  const months = [
+    'Janvier',
+    'Février',
+    'Mars',
+    'Avril',
+    'Mai',
+    'Juin',
+    'Juillet',
+    'Août',
+    'Septembre',
+    'Octobre',
+    'Novembre',
+    'Décembre',
+  ]
   return `${months[availabilityMonth.value.getMonth()]} ${availabilityMonth.value.getFullYear()}`
 })
 
 watch(availabilityDate, async (d) => {
-  if (!d) { slotsForSelectedDate.value = []; return }
+  if (!d) {
+    slotsForSelectedDate.value = []
+    return
+  }
   loadingSlots.value = true
   try {
     slotsForSelectedDate.value = await getMySlotsForDate(d)
@@ -54,10 +70,18 @@ watch(availabilityDate, async (d) => {
 })
 
 function prevAvailabilityMonth() {
-  availabilityMonth.value = new Date(availabilityMonth.value.getFullYear(), availabilityMonth.value.getMonth() - 1, 1)
+  availabilityMonth.value = new Date(
+    availabilityMonth.value.getFullYear(),
+    availabilityMonth.value.getMonth() - 1,
+    1,
+  )
 }
 function nextAvailabilityMonth() {
-  availabilityMonth.value = new Date(availabilityMonth.value.getFullYear(), availabilityMonth.value.getMonth() + 1, 1)
+  availabilityMonth.value = new Date(
+    availabilityMonth.value.getFullYear(),
+    availabilityMonth.value.getMonth() + 1,
+    1,
+  )
 }
 function selectAvailabilityDate(dateStr: string) {
   if (!dateStr) return
@@ -88,20 +112,37 @@ async function saveSlots() {
 
 <template>
   <div class="space-y-6">
-    <h2 class="pds-h2">
-      Mes indisponibilités
-    </h2>
+    <h2 class="pds-h2">Mes indisponibilités</h2>
     <div class="pds-card space-y-4">
       <p class="text-sm text-[var(--pds-muted)]">
-        Tu es considéré disponible à tout moment sauf aux créneaux ci-dessous. Choisis une date puis ajoute les créneaux où tu n’es pas dispo (ex. 10h–14h).
+        Tu es considéré disponible à tout moment sauf aux créneaux ci-dessous. Choisis une date puis
+        ajoute les créneaux où tu n’es pas dispo (ex. 10h–14h).
       </p>
       <div class="flex items-center justify-between">
-        <button type="button" class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10" @click="prevAvailabilityMonth">‹</button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
+          @click="prevAvailabilityMonth"
+        >
+          ‹
+        </button>
         <span class="font-medium text-[var(--pds-text)]">{{ availabilityMonthLabel }}</span>
-        <button type="button" class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10" @click="nextAvailabilityMonth">›</button>
+        <button
+          type="button"
+          class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
+          @click="nextAvailabilityMonth"
+        >
+          ›
+        </button>
       </div>
       <div class="grid grid-cols-7 gap-1 sm:gap-2">
-        <div v-for="(lab, di) in ['L','M','M','J','V','S','D']" :key="di" class="text-center text-xs text-[var(--pds-muted)]">{{ lab }}</div>
+        <div
+          v-for="(lab, di) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']"
+          :key="di"
+          class="text-center text-xs text-[var(--pds-muted)]"
+        >
+          {{ lab }}
+        </div>
         <button
           v-for="(cell, idx) in availabilityCalendarDays"
           :key="idx"
@@ -110,8 +151,10 @@ async function saveSlots() {
           :class="{
             'border-transparent bg-transparent': cell.day == null,
             'cursor-not-allowed opacity-40': cell.disabled && cell.day != null,
-            'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white': availabilityDate === cell.dateStr,
-            'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]': cell.day != null && !cell.disabled && availabilityDate !== cell.dateStr
+            'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white':
+              availabilityDate === cell.dateStr,
+            'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]':
+              cell.day != null && !cell.disabled && availabilityDate !== cell.dateStr,
           }"
           :disabled="cell.day == null || cell.disabled"
           @click="selectAvailabilityDate(cell.dateStr)"
@@ -133,7 +176,9 @@ async function saveSlots() {
             <select v-model.number="addSlotEnd" class="pds-input w-20">
               <option v-for="h in hourOptions" :key="h" :value="h">{{ h }}h</option>
             </select>
-            <button type="button" class="btn-primary !py-2 !px-3 !text-sm" @click="addSlot">Ajouter un créneau indispo</button>
+            <button type="button" class="btn-primary !py-2 !px-3 !text-sm" @click="addSlot">
+              Ajouter un créneau indispo
+            </button>
           </div>
           <ul class="mb-3 space-y-2">
             <li
@@ -142,10 +187,17 @@ async function saveSlots() {
               class="flex items-center justify-between rounded-lg border border-[var(--pds-border)] bg-[var(--pds-bg)] px-3 py-2 text-sm"
             >
               <span>{{ slot.start }} – {{ slot.end }}</span>
-              <button type="button" class="text-red-400 hover:underline" @click="removeSlot(i)">Supprimer</button>
+              <button type="button" class="text-red-400 hover:underline" @click="removeSlot(i)">
+                Supprimer
+              </button>
             </li>
           </ul>
-          <button type="button" class="btn-primary !py-2 !px-3 !text-sm" :disabled="savingSlots" @click="saveSlots">
+          <button
+            type="button"
+            class="btn-primary !py-2 !px-3 !text-sm"
+            :disabled="savingSlots"
+            @click="saveSlots"
+          >
             {{ savingSlots ? 'Enregistrement...' : 'Enregistrer les indisponibilités' }}
           </button>
         </template>

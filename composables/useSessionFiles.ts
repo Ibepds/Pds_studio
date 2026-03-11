@@ -8,12 +8,7 @@ import {
   where,
   Timestamp,
 } from 'firebase/firestore'
-import {
-  getStorage,
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from 'firebase/storage'
+import { getStorage, ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage'
 
 interface SessionFile {
   id: string
@@ -127,4 +122,3 @@ export const useSessionFiles = () => {
     uploadForSession,
   }
 }
-

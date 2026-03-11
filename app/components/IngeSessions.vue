@@ -3,7 +3,12 @@ import { computed, onMounted, ref } from 'vue'
 import { useSessions } from '../../composables/useSessions'
 import { useAuth } from '../../composables/useAuth'
 
-const { sessions, listAllUpcoming, updateSessionRemainingToPay, loading: sessionsLoading } = useSessions()
+const {
+  sessions,
+  listAllUpcoming,
+  updateSessionRemainingToPay,
+  loading: sessionsLoading,
+} = useSessions()
 const { currentUser } = useAuth()
 
 const selectedSessionId = ref<string | null>(null)
@@ -40,21 +45,15 @@ function selectSession(id: string) {
 
 <template>
   <div class="space-y-6">
-    <h2 class="pds-h2">
-      Sessions à venir
-    </h2>
+    <h2 class="pds-h2">Sessions à venir</h2>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Calendrier semaine
-      </h3>
+      <h3 class="pds-subtitle">Calendrier semaine</h3>
       <WeekCalendar :sessions="myUpcomingSessions" />
     </div>
 
     <div class="pds-card space-y-3">
-      <h3 class="pds-subtitle">
-        Liste des sessions
-      </h3>
+      <h3 class="pds-subtitle">Liste des sessions</h3>
       <div v-if="sessionsLoading" class="text-sm text-[var(--pds-muted)]">
         Chargement des sessions...
       </div>
@@ -95,14 +94,29 @@ function selectSession(id: string) {
                 'bg-red-800/20 text-red-200': s.status === 'cancelled',
               }"
             >
-              {{ s.status === 'waiting_payment' ? 'Attente paiement' : s.status === 'pending' ? 'En attente ingé' : s.status === 'confirmed' ? 'Confirmée' : s.status === 'done' ? 'Terminée' : s.status === 'cancelled' ? 'Annulée' : s.status }}
+              {{
+                s.status === 'waiting_payment'
+                  ? 'Attente paiement'
+                  : s.status === 'pending'
+                    ? 'En attente ingé'
+                    : s.status === 'confirmed'
+                      ? 'Confirmée'
+                      : s.status === 'done'
+                        ? 'Terminée'
+                        : s.status === 'cancelled'
+                          ? 'Annulée'
+                          : s.status
+              }}
             </span>
           </button>
           <div
             v-if="(s.status === 'confirmed' || s.status === 'done') && restToPay(s) >= 0"
             class="mt-2 flex items-center justify-between border-t border-[var(--pds-border)] pt-2 text-xs text-[var(--pds-muted)]"
           >
-            <span>Reste à payer : <strong class="text-[var(--pds-text)]">{{ restToPay(s) }}€</strong></span>
+            <span
+              >Reste à payer :
+              <strong class="text-[var(--pds-text)]">{{ restToPay(s) }}€</strong></span
+            >
             <button
               v-if="restToPay(s) > 0"
               type="button"

@@ -8,12 +8,7 @@ import {
   onAuthStateChanged,
   sendEmailVerification,
 } from 'firebase/auth'
-import {
-  doc,
-  getDoc,
-  setDoc,
-  getFirestore,
-} from 'firebase/firestore'
+import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore'
 
 export type UserRole = 'booker' | 'inge' | 'beatmaker' | 'admin'
 
@@ -193,4 +188,3 @@ export const useAuth = () => {
     logout,
   }
 }
-

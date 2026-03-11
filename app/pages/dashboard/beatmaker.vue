@@ -30,18 +30,16 @@ function isActive(to: string) {
 
 <template>
   <section class="space-y-6">
-    <header class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--pds-border)] pb-4">
+    <header
+      class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--pds-border)] pb-4"
+    >
       <div>
-        <h1 class="pds-h2 text-xl">
-          Tableau de bord – Beatmaker
-        </h1>
+        <h1 class="pds-h2 text-xl">Tableau de bord – Beatmaker</h1>
         <p class="pds-subtitle mt-1">
           {{ currentUser?.email }}
         </p>
       </div>
-      <button type="button" class="btn-secondary" @click="handleLogout">
-        Déconnexion
-      </button>
+      <button type="button" class="btn-secondary" @click="handleLogout">Déconnexion</button>
     </header>
 
     <nav class="flex flex-wrap gap-2 border-b border-[var(--pds-border)] pb-4">
@@ -50,7 +48,11 @@ function isActive(to: string) {
         :key="link.to"
         :to="link.to"
         class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-        :class="isActive(link.to) ? 'bg-[var(--pds-primary)]/20 text-[var(--pds-primary)]' : 'text-[var(--pds-muted)] hover:text-[var(--pds-text)] hover:bg-[var(--pds-border)]/50'"
+        :class="
+          isActive(link.to)
+            ? 'bg-[var(--pds-primary)]/20 text-[var(--pds-primary)]'
+            : 'text-[var(--pds-muted)] hover:text-[var(--pds-text)] hover:bg-[var(--pds-border)]/50'
+        "
       >
         {{ link.label }}
       </NuxtLink>

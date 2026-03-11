@@ -5,7 +5,8 @@ import { useAvailability, slotOverlapsAny } from '../../composables/useAvailabil
 import { useAuth } from '../../composables/useAuth'
 import type { Session } from '../../composables/useSessions'
 
-const { listAllPending, listAllUpcoming, updateSessionStatus, updateSessionRecapSent } = useSessions()
+const { listAllPending, listAllUpcoming, updateSessionStatus, updateSessionRecapSent } =
+  useSessions()
 const { getMySlotsForDate } = useAvailability()
 const { currentUser } = useAuth()
 
@@ -83,15 +84,12 @@ onMounted(loadSessionsToConfirm)
 
 <template>
   <div class="pds-card space-y-3">
-    <h2 class="pds-h2">
-      Sessions à confirmer
-    </h2>
+    <h2 class="pds-h2">Sessions à confirmer</h2>
     <p class="text-sm text-[var(--pds-muted)]">
-      Ces réservations tombent sur des créneaux où tu es dispo (hors de tes indisponibilités). Confirme pour les valider.
+      Ces réservations tombent sur des créneaux où tu es dispo (hors de tes indisponibilités).
+      Confirme pour les valider.
     </p>
-    <div v-if="loadingSessionsToConfirm" class="text-sm text-[var(--pds-muted)]">
-      Chargement...
-    </div>
+    <div v-if="loadingSessionsToConfirm" class="text-sm text-[var(--pds-muted)]">Chargement...</div>
     <div v-else-if="sessionsToConfirm.length === 0" class="text-sm text-[var(--pds-muted)]">
       Aucune session en attente sur tes créneaux.
     </div>
@@ -103,7 +101,9 @@ onMounted(loadSessionsToConfirm)
       >
         <div>
           <p class="font-medium">{{ s.date }} • {{ s.startTime }} – {{ s.endTime }}</p>
-          <p class="text-xs text-[var(--pds-muted)]">{{ s.bookerEmail ?? s.bookerId }} · {{ s.style }}</p>
+          <p class="text-xs text-[var(--pds-muted)]">
+            {{ s.bookerEmail ?? s.bookerId }} · {{ s.style }}
+          </p>
         </div>
         <button
           type="button"

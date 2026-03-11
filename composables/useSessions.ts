@@ -89,7 +89,10 @@ function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
     durationHours: raw.durationHours as number | undefined,
     totalPrice: raw.totalPrice as number | undefined,
     depositAmount: raw.depositAmount as number | undefined,
-    recapSentAt: (raw.recapSentAt as Timestamp | undefined)?.toDate?.() ?? (raw.recapSentAt as Date | undefined) ?? null,
+    recapSentAt:
+      (raw.recapSentAt as Timestamp | undefined)?.toDate?.() ??
+      (raw.recapSentAt as Date | undefined) ??
+      null,
     remainingToPay: raw.remainingToPay !== undefined ? (raw.remainingToPay as number) : undefined,
     createdAt: (raw.createdAt as Timestamp | undefined)?.toDate?.() ?? new Date(),
   }
@@ -200,11 +203,7 @@ export const useSessions = () => {
     if (!db) throw new Error('Firestore non initialisé')
 
     const contactEmail = (payload.contactEmail || user?.email || null) as string | null
-    const bookerId =
-      user?.uid ||
-      (contactEmail
-        ? `guest:${contactEmail}`
-        : `guest:${Date.now()}`)
+    const bookerId = user?.uid || (contactEmail ? `guest:${contactEmail}` : `guest:${Date.now()}`)
 
     // On ne persiste pas contactEmail en double, on le mappe vers bookerEmail
     const { contactEmail: _contactEmail, ...restPayload } = payload
@@ -269,7 +268,12 @@ export const useSessions = () => {
 
       const data: Session[] = []
       snap.forEach((d) => {
-        data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
+        data.push(
+          parseSessionDoc(d.id, {
+            ...d.data(),
+            status: (d.data() as any).status ?? 'pending',
+          } as Record<string, unknown>),
+        )
       })
 
       sessions.value = data
@@ -289,7 +293,12 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
+      data.push(
+        parseSessionDoc(d.id, {
+          ...d.data(),
+          status: (d.data() as any).status ?? 'pending',
+        } as Record<string, unknown>),
+      )
     })
     data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     return data
@@ -305,7 +314,12 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      data.push(parseSessionDoc(d.id, { ...d.data(), status: (d.data() as any).status ?? 'pending' } as Record<string, unknown>))
+      data.push(
+        parseSessionDoc(d.id, {
+          ...d.data(),
+          status: (d.data() as any).status ?? 'pending',
+        } as Record<string, unknown>),
+      )
     })
     const pending = data.filter((s) => s.status === 'pending')
     pending.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
@@ -365,4 +379,3 @@ export const useSessions = () => {
     updateSessionRemainingToPay,
   }
 }
-

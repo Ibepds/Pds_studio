@@ -13,7 +13,11 @@ interface CalendarEventBody {
   }
 }
 
-async function getAccessToken(clientId: string, clientSecret: string, refreshToken: string): Promise<string> {
+async function getAccessToken(
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
+): Promise<string> {
   const res = await $fetch<{ access_token: string }>('https://oauth2.googleapis.com/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -46,11 +50,17 @@ export default defineEventHandler(async (event) => {
   const [startH, startM] = (s.startTime || '10:00').split(':').map(Number)
   const [endH, endM] = (s.endTime || '12:00').split(':').map(Number)
   const dateStr = s.date
-  const start = new Date(`${dateStr}T${String(startH).padStart(2, '0')}:${String(startM || 0).padStart(2, '0')}:00`)
-  const end = new Date(`${dateStr}T${String(endH).padStart(2, '0')}:${String(endM || 0).padStart(2, '0')}:00`)
+  const start = new Date(
+    `${dateStr}T${String(startH).padStart(2, '0')}:${String(startM || 0).padStart(2, '0')}:00`,
+  )
+  const end = new Date(
+    `${dateStr}T${String(endH).padStart(2, '0')}:${String(endM || 0).padStart(2, '0')}:00`,
+  )
 
   const summary = `Session PDS ${s.bookerEmail ?? 'Booker'}`
-  const description = [s.style && `Style: ${s.style}`, s.bookerEmail && `Booker: ${s.bookerEmail}`].filter(Boolean).join('\n')
+  const description = [s.style && `Style: ${s.style}`, s.bookerEmail && `Booker: ${s.bookerEmail}`]
+    .filter(Boolean)
+    .join('\n')
 
   try {
     const accessToken = await getAccessToken(clientId, clientSecret, refreshToken)
