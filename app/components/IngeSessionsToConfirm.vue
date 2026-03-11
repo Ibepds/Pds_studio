@@ -57,7 +57,8 @@ async function confirmSession(s: Session) {
       console.error('Send recap', e)
     }
     try {
-      await $fetch('/api/google-calendar-event', {
+      console.log('Google Calendar', s)
+      const res = await $fetch('/api/google-calendar-event', {
         method: 'POST',
         body: {
           session: {
@@ -69,6 +70,7 @@ async function confirmSession(s: Session) {
           },
         },
       })
+      console.log('Google Calendar done', res)
     } catch (e) {
       console.error('Google Calendar', e)
     }

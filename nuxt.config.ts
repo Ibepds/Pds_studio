@@ -36,10 +36,10 @@ export default defineNuxtConfig({
     twilioFromPhone: process.env.TWILIO_FROM_PHONE || '',
     adminEmail: process.env.ADMIN_EMAIL || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_EMAIL || '',
     adminPhone: process.env.ADMIN_PHONE || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',
-    googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-    googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-    googleRefreshToken: process.env.GOOGLE_REFRESH_TOKEN || '',
+    /** Google Calendar (Service Account) : chemin vers le JSON de clé OU email + clé privée */
+    googleApplicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',
+    googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
+    googleServiceAccountPrivateKey: process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY || '',
     googleCalendarId: process.env.GOOGLE_CALENDAR_ID || 'primary',
-    googleApiKey: process.env.GOOGLE_API_KEY || '',
   },
 })
