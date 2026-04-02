@@ -257,7 +257,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
           </button>
         </p>
       </div>
-      <div v-else class="mx-auto max-w-3xl px-4 py-10 sm:px-6">
+      <div v-else class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
         <button
           type="button"
           class="mb-8 text-sm text-[var(--pds-muted)] transition-colors hover:text-[var(--pds-primary)]"
@@ -275,76 +275,139 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
     </template>
 
     <!-- Tab paiement invité -->
-    <div v-else class="pds-container mx-auto max-w-4xl py-10">
-      <div class="pds-card space-y-4">
-        <h2 class="pds-subtitle">Payer une réservation existante</h2>
-        <p class="text-sm text-[var(--pds-muted2)]">
-          Indique le <strong>nom de ta réservation</strong> tel que saisi lors de la réservation.
-        </p>
-        <div class="space-y-2">
-          <label class="pds-label">Nom de la réservation</label>
-          <input
-            v-model="reservationSearch"
-            type="text"
-            class="pds-input w-full max-w-md"
-            placeholder="Ex. Session EP, Mix single…"
-          />
-        </div>
-        <button
-          type="button"
-          class="btn-primary mt-2"
-          :disabled="loadingSearch"
-          @click="searchReservations"
-        >
-          {{ loadingSearch ? 'Recherche…' : 'Rechercher' }}
-        </button>
-        <p v-if="searchError" class="mt-2 text-sm text-red-400">
-          {{ searchError }}
-        </p>
+    <div
+      v-else
+      class="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-6 min-h-[calc(100dvh-160px)]"
+    >
+      <div class="pointer-events-none absolute inset-0 min-h-[620px]">
+        <FigmaLandingBackground variant="slot" />
       </div>
+      <div class="relative z-10 px-4 py-10 sm:px-6 sm:py-14">
+        <div class="mx-auto max-w-[1100px] space-y-10">
+          <div>
+            <h2
+              class="font-[Raleway,sans-serif] text-3xl font-extrabold uppercase leading-none tracking-tight text-white sm:text-4xl md:text-[50px] md:leading-[0.76]"
+            >
+              Payer sans compte
+            </h2>
+            <p class="mt-3 text-sm text-[var(--pds-muted2)] sm:text-base">
+              Indique le <strong>nom de ta réservation</strong> tel que saisi lors de la réservation.
+            </p>
+          </div>
 
-      <div v-if="searchResults.length" class="mt-8 space-y-4">
-        <h3 class="pds-subtitle">Réservations trouvées</h3>
-        <div class="space-y-3">
-          <div
-            v-for="s in searchResults"
-            :key="s.id"
-            class="pds-card space-y-2 border border-[var(--pds-border)]"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2">
-              <div class="space-y-1 text-sm">
-                <div class="font-medium text-[var(--pds-text)]">
-                  {{ s.date }} — {{ s.startTime }}–{{ s.endTime }}
-                </div>
-                <div v-if="s.reservationName" class="text-xs text-[var(--pds-muted)]">
-                  « {{ s.reservationName }} »
-                </div>
-                <div v-if="s.totalPrice" class="text-xs text-[var(--pds-muted2)]">
-                  Prix total : {{ s.totalPrice }}€
+          <!-- Bloc recherche -->
+          <div class="rounded-2xl border border-[var(--pds-border)] bg-[rgba(21,21,21,0.6)] p-6 sm:p-8">
+            <div class="space-y-2">
+              <label class="font-[Raleway,sans-serif] text-lg font-medium text-white/70">
+                Nom de la réservation
+              </label>
+              <input
+                v-model="reservationSearch"
+                type="text"
+                autocomplete="off"
+                class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+                placeholder="Ex. Session EP, Mix single…"
+              />
+            </div>
+            <button
+              type="button"
+              class="mt-4 rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+              :disabled="loadingSearch"
+              @click="searchReservations"
+            >
+              {{ loadingSearch ? 'Recherche…' : 'Rechercher' }}
+            </button>
+            <p v-if="searchError" class="mt-2 text-sm text-red-400">
+              {{ searchError }}
+            </p>
+          </div>
+
+          <!-- Résultats -->
+          <div v-if="searchResults.length" class="space-y-6">
+            <h3 class="font-[Raleway,sans-serif] text-2xl font-bold text-white">Réservations trouvées</h3>
+            <div class="space-y-4">
+              <div
+                v-for="s in searchResults"
+                :key="s.id"
+                class="rounded-2xl border border-[var(--pds-border)] bg-[var(--pds-bg)] p-6"
+              >
+                <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
+                  <!-- Colonne gauche : info -->
+                  <div class="flex w-full flex-col gap-5 lg:max-w-[420px]">
+                    <div class="flex flex-wrap items-center justify-between gap-2">
+                      <h3 class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white">
+                        Information Artiste
+                      </h3>
+                      <span class="rounded-full bg-red-500/20 px-3 py-0.5 text-xs text-red-300">
+                        Attente paiement
+                      </span>
+                    </div>
+
+                    <dl class="flex flex-col gap-4 font-[Raleway,sans-serif] text-lg font-medium text-white">
+                      <div class="flex flex-col gap-1">
+                        <dt class="text-white/60">Nom réservation</dt>
+                        <dd class="break-all text-white/90">{{ s.reservationName ?? '—' }}</dd>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <dt class="text-white/60">Email</dt>
+                        <dd class="break-all text-white/90">{{ s.bookerEmail ?? '—' }}</dd>
+                      </div>
+                      <div class="flex flex-col gap-1">
+                        <dt class="text-white/60">Téléphone</dt>
+                        <dd class="break-all text-white/90">{{ s.bookerPhone ?? '—' }}</dd>
+                      </div>
+                      <div v-if="s.bookerNotes?.trim()" class="flex flex-col gap-1">
+                        <dt class="text-white/60">Informations complémentaires</dt>
+                        <dd class="whitespace-pre-wrap text-white/90">{{ s.bookerNotes }}</dd>
+                      </div>
+                    </dl>
+                  </div>
+
+                  <!-- Séparateur desktop -->
+                  <div class="hidden h-auto min-h-[220px] w-px shrink-0 bg-white/30 lg:block" aria-hidden="true" />
+
+                  <!-- Colonne droite : résumé -->
+                  <div class="flex w-full flex-col gap-5 lg:max-w-[420px]">
+                    <h3 class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white">
+                      Résumé de la commande
+                    </h3>
+
+                    <div class="flex flex-col gap-3 font-[Raleway,sans-serif] text-lg font-medium text-white">
+                      <p class="text-white/90">
+                        {{ s.date }} — {{ s.startTime }}–{{ s.endTime }}
+                      </p>
+                      <p class="text-sm text-white/60">
+                        Studio : <strong class="text-white/90">{{ s.style }}</strong>
+                      </p>
+                      <p class="text-sm text-white/60">
+                        Total : <strong class="text-white/90">{{ s.totalPrice ?? 0 }}€</strong> · Acompte 30%
+                        <strong class="text-white/90">{{ depositForSession(s) }}€</strong>
+                      </p>
+                    </div>
+
+                    <div class="mt-3">
+                      <button
+                        type="button"
+                        class="w-full rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+                        @click="initPaypalGuest(s.id, depositForSession(s))"
+                      >
+                        Confirmer et payer
+                      </button>
+                      <div :id="`paypal-button-guest-${s.id}`" class="mt-3" />
+                      <p class="mt-2 text-xs text-white/60">
+                        Paiement avec PayPal (acompte).
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <span class="rounded-full bg-red-500/20 px-2 py-0.5 text-xs text-red-300">
-                Attente paiement
-              </span>
             </div>
-            <div class="mt-2 border-t border-[var(--pds-border)] pt-3">
-              <p class="mb-2 text-xs text-[var(--pds-muted)]">
-                Acompte : <strong>{{ depositForSession(s) }}€</strong> (30&nbsp;%)
-              </p>
-              <button
-                type="button"
-                class="btn-secondary !py-2 !px-3 !text-sm"
-                @click="initPaypalGuest(s.id, depositForSession(s))"
-              >
-                Payer avec PayPal
-              </button>
-              <div :id="`paypal-button-guest-${s.id}`" class="mt-2" />
-            </div>
+
+            <p v-if="paypalError" class="mt-1 text-sm text-red-400">
+              {{ paypalError }}
+            </p>
           </div>
         </div>
-        <p v-if="paypalError" class="mt-1 text-xs text-red-400">
-          {{ paypalError }}
-        </p>
       </div>
     </div>
   </div>

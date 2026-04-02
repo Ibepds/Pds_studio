@@ -156,7 +156,8 @@ function hourLabelClass(h: number): string {
       </div>
 
       <div class="booking-slot-grid__scroll min-w-0 overflow-x-auto">
-        <div class="booking-slot-grid__inner inline-flex min-w-[min(100%,920px)] gap-2 sm:gap-3">
+        <!-- Augmenter la largeur max pour que le calendrier soit plus "grand" sur desktop -->
+        <div class="booking-slot-grid__inner inline-flex min-w-[min(100%,1200px)] gap-2 sm:gap-3">
           <!-- Heures gauche -->
           <div
             class="booking-slot-grid__axis flex w-9 shrink-0 flex-col gap-1 py-0 sm:w-[37px]"
@@ -262,11 +263,11 @@ function hourLabelClass(h: number): string {
 }
 
 .booking-slot-grid__hour {
-  height: 16px;
+  height: 18px;
   font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
   font-size: 12px;
   font-weight: 300;
-  line-height: 10px;
+  line-height: 18px;
   text-align: center;
   color: #818181;
   display: flex;
@@ -282,9 +283,9 @@ function hourLabelClass(h: number): string {
 
 .booking-slot-grid__cell {
   width: 100%;
-  height: 16px;
+  height: 18px;
   border: none;
-  border-radius: 5px;
+  border-radius: 6px;
   padding: 0;
   flex-shrink: 0;
   transition: opacity 0.15s ease;
