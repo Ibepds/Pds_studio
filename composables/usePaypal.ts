@@ -32,6 +32,7 @@ export const usePaypal = (): (() => Promise<any>) => {
 
     paypalPromise = new Promise((resolve, reject) => {
       const script = document.createElement('script')
+      // Chargement standard PayPal. (On ajuste ensuite côté `paypal.Buttons`.)
       script.src = `https://www.paypal.com/sdk/js?client-id=${clientId}&currency=EUR`
       script.async = true
       script.onload = () => {

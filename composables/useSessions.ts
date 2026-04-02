@@ -29,8 +29,11 @@ export interface Session {
   startTime: string // HH:mm
   endTime: string // HH:mm
   style: string
-  /** Nom libre donné par le booker pour identifier la réservation */
+  /** Nom libre donné par le booker pour identifier la réservation (souvent « Prénom Nom ») */
   reservationName?: string
+  bookerPhone?: string
+  /** Informations complémentaires saisies à la réservation */
+  bookerNotes?: string
   beatId?: string
   beatTitle?: string
   beatmakerId?: string
@@ -78,6 +81,8 @@ function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
     endTime: raw.endTime as string,
     style: (raw.style as string) ?? '',
     reservationName: raw.reservationName as string | undefined,
+    bookerPhone: raw.bookerPhone as string | undefined,
+    bookerNotes: raw.bookerNotes as string | undefined,
     beatId: raw.beatId as string | undefined,
     beatTitle: raw.beatTitle as string | undefined,
     beatmakerId: raw.beatmakerId as string | undefined,
@@ -206,6 +211,8 @@ export const useSessions = () => {
     endTime: string
     style: string
     reservationName?: string
+    bookerPhone?: string
+    bookerNotes?: string
     beatId?: string
     beatTitle?: string
     beatmakerId?: string
@@ -243,12 +250,13 @@ export const useSessions = () => {
       const data = Object.fromEntries(
         Object.entries(raw).filter(([, v]) => v !== undefined),
       ) as Record<string, unknown>
-      await addDoc(col, data)
+      const docRef = await addDoc(col, data)
 
       // Si un booker est connecté, on rafraîchit sa liste
       if (user) {
         await listForCurrentBooker()
       }
+      return docRef.id
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors de la réservation'
       throw e

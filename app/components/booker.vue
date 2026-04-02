@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { navigateTo } from '#app'
 import { useSessions } from '../../composables/useSessions'
 import { useSessionFiles } from '../../composables/useSessionFiles'
 import { useBookerProdUpload } from '../../composables/useBookerProdUpload'
@@ -16,9 +17,19 @@ import { getAvailableStartHours } from '../../utils/pricing'
 import { DURATION_OPTIONS, getDeposit, getTotalPrice } from '../../utils/pricing'
 
 /** 'reserver' = formulaire uniquement, 'mes-sessions' = liste + PayPal uniquement, 'all' = tout (défaut) */
-const props = withDefaults(defineProps<{ mode?: 'reserver' | 'mes-sessions' | 'all' }>(), {
-  mode: 'all',
-})
+const props = withDefaults(
+  defineProps<{
+    mode?: 'reserver' | 'mes-sessions' | 'all'
+    /** Fourni par la page après l’étape « Beatmaker / Ingé » (hors composant) */
+    bookingKind?: 'beatmaker' | 'inge' | null
+  }>(),
+  {
+    mode: 'all',
+    bookingKind: null,
+  },
+)
+
+const emit = defineEmits<{ booked: []; backKind: [] }>()
 const showReserver = computed(() => props.mode === 'reserver' || props.mode === 'all')
 const showMesSessions = computed(() => props.mode === 'mes-sessions' || props.mode === 'all')
 
@@ -46,20 +57,74 @@ const { currentUser } = useAuth()
 const durationHours = ref<number | null>(null)
 const date = ref<string>('')
 const startHour = ref<number | null>(null)
-const reservationName = ref<string>('')
+const artistFirstName = ref<string>('')
+const artistLastName = ref<string>('')
+const contactPhone = ref<string>('')
 const contactEmail = ref<string>('')
+const bookerNotes = ref<string>('')
+
+const artistFullName = computed(() =>
+  `${artistFirstName.value.trim()} ${artistLastName.value.trim()}`.trim(),
+)
 
 const bookerProdFile = ref<File | null>(null)
 const localError = ref<string | null>(null)
 const success = ref<string | null>(null)
 const uploadingProd = ref(false)
 
-const calendarMonth = ref(new Date())
+function mondayOfWeekContaining(d: Date): Date {
+  const x = new Date(d)
+  x.setHours(12, 0, 0, 0)
+  const day = x.getDay()
+  const diff = day === 0 ? -6 : 1 - day
+  x.setDate(x.getDate() + diff)
+  return x
+}
+
+const slotWeekStart = ref<Date>(mondayOfWeekContaining(new Date()))
+const weekAvailabilityMap = ref<Record<string, number[]>>({})
+const occupiedHoursByDate = ref<Record<string, number[]>>({})
 const availableStartHoursList = ref<number[]>([])
 const loadingSlots = ref(false)
 
 const paypalError = ref<string | null>(null)
 const paypalRenderedFor = ref<string | null>(null)
+
+/** Overlay pendant le lancement PayPal (étape "Confirmer et payer"). */
+const paymentModalOpen = ref(false)
+const paymentModalSessionId = ref<string | null>(null)
+
+type PaymentResult = 'success' | 'error'
+const paymentResult = ref<PaymentResult | null>(null)
+let paymentResultTimer: number | null = null
+
+function clearPaymentResultTimer() {
+  if (paymentResultTimer != null) {
+    clearTimeout(paymentResultTimer)
+    paymentResultTimer = null
+  }
+}
+
+function showPaymentResult(result: PaymentResult) {
+  paymentResult.value = result
+  clearPaymentResultTimer()
+
+  // On laisse l'écran afficher 6 secondes avant de revenir à l'accueil.
+  paymentResultTimer = window.setTimeout(() => {
+    paymentResult.value = null
+    navigateTo('/')
+  }, 6000)
+}
+
+function goHomeNow() {
+  clearPaymentResultTimer()
+  paymentResult.value = null
+  navigateTo('/')
+}
+
+onBeforeUnmount(() => {
+  clearPaymentResultTimer()
+})
 
 // Fichiers livrés par l'ingé pour une session (consultables dans "Mes réservations")
 const filesSessionId = ref<string | null>(null)
@@ -87,7 +152,12 @@ watch(
   { immediate: true },
 )
 
-const canChooseDate = computed(() => durationHours.value != null)
+const weekHasNoSlots = computed(() => {
+  const m = weekAvailabilityMap.value
+  const keys = Object.keys(m)
+  if (keys.length === 0) return false
+  return keys.every((k) => (m[k]?.length ?? 0) === 0)
+})
 
 const selectedDate = computed(() => (date.value ? new Date(date.value + 'T12:00:00') : null))
 const totalPrice = computed(() =>
@@ -103,9 +173,37 @@ const summaryTimeRange = computed(() => {
   return `${startHour.value}h – ${end}h`
 })
 
+/** Libellés maquette récap (ex. « Samedi 14 mars », « 13h00 - 17h00 ») */
+const recapDateLabel = computed(() => {
+  if (!selectedDate.value) return ''
+  return selectedDate.value.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  })
+})
+
+const recapTimeRangeLabel = computed(() => {
+  if (startHour.value == null || !durationHours.value) return ''
+  const end = startHour.value + durationHours.value
+  return `${String(startHour.value).padStart(2, '0')}h00 - ${String(end).padStart(2, '0')}h00`
+})
+
+const recapSessionLine = computed(() => {
+  if (props.bookingKind === 'beatmaker') return 'Session Beatmaker'
+  if (props.bookingKind === 'inge') return 'Session Ingénieur du son'
+  return 'Session'
+})
+
+const recapEmailDisplay = computed(
+  () => contactEmail.value.trim() || currentUser.value?.email || '—',
+)
+
 const canBook = computed(() => {
   const hasCoreFields =
-    reservationName.value.trim() &&
+    artistFirstName.value.trim() &&
+    artistLastName.value.trim() &&
+    contactPhone.value.trim() &&
     date.value &&
     durationHours.value &&
     startHour.value != null &&
@@ -113,77 +211,211 @@ const canBook = computed(() => {
 
   const email = contactEmail.value.trim() || currentUser.value?.email
 
+  if (useBookingWizard.value && props.bookingKind == null) return false
   return !!(hasCoreFields && email)
 })
 
-async function loadAvailableSlots() {
-  const d = date.value
+/** Parcours en 3 étapes (après choix du type sur la page) : créneau → infos → validation */
+const bookingStep = ref<1 | 2 | 3>(1)
+const useBookingWizard = computed(() => props.mode === 'reserver' || props.mode === 'all')
+
+const sessionStyleLabel = computed(() => {
+  if (props.bookingKind === 'beatmaker') return 'Beatmaker'
+  if (props.bookingKind === 'inge') return 'Ingénieur du son'
+  return ''
+})
+
+const canProceedSlotStep = computed(() => {
+  if (durationHours.value == null || !date.value || startHour.value == null) return false
+  if (loadingSlots.value) return false
+  if (availableStartHoursList.value.length === 0) return false
+  return totalPrice.value > 0
+})
+
+const canProceedContactStep = computed(() => {
+  const email = contactEmail.value.trim() || currentUser.value?.email
+  return !!(
+    artistFirstName.value.trim() &&
+    artistLastName.value.trim() &&
+    contactPhone.value.trim() &&
+    email
+  )
+})
+
+function nextBookingStep() {
+  if (bookingStep.value === 1 && canProceedSlotStep.value) bookingStep.value = 2
+  else if (bookingStep.value === 2 && canProceedContactStep.value) bookingStep.value = 3
+}
+
+function prevBookingStep() {
+  if (bookingStep.value > 1) bookingStep.value = (bookingStep.value - 1) as 1 | 2 | 3
+}
+
+function minutesFromTime(t: string): number {
+  const [h, m] = t.split(':').map(Number)
+  return (h ?? 0) * 60 + (m ?? 0)
+}
+
+function hourBlockOverlapsSession(h: number, startTime: string, endTime: string): boolean {
+  const block0 = h * 60
+  const block1 = (h + 1) * 60
+  const s0 = minutesFromTime(startTime)
+  const s1 = minutesFromTime(endTime)
+  return block0 < s1 && block1 > s0
+}
+
+function getWeekDateStrings(monday: Date): string[] {
+  const base = new Date(monday)
+  base.setHours(12, 0, 0, 0)
+  const out: string[] = []
+  for (let i = 0; i < 7; i++) {
+    const x = new Date(base)
+    x.setDate(base.getDate() + i)
+    out.push(
+      `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`,
+    )
+  }
+  return out
+}
+
+type BookedSessionRow = { date: string; startTime: string; endTime: string }
+
+async function computeAvailableStartsForDate(
+  d: string,
+  preloadedBooked?: BookedSessionRow[],
+): Promise<number[]> {
   const dur = durationHours.value
-  if (!d || dur == null) {
+  const kind = props.bookingKind
+  if (!d || dur == null || !kind) return []
+  const role = kind === 'beatmaker' ? 'beatmaker' : 'inge'
+  const pros = await listUsersByRole(role)
+  const proIds = pros.map((p) => p.uid)
+  const unavailMap =
+    proIds.length > 0
+      ? await getSlotsForUsersOnDate(proIds, d)
+      : new Map<string, { start: string; end: string }[]>()
+  const hours = getAvailableStartHours(dur)
+  const booked = preloadedBooked ?? (await listSessionsForDate(d))
+  const blocks: SessionBlock[] = booked.map((s) => ({
+    date: s.date,
+    startTime: s.startTime,
+    endTime: s.endTime,
+  }))
+  let available = filterOutBookedSlots(hours, d, dur, blocks)
+  if (proIds.length > 0) {
+    available = available.filter((h) => {
+      const slot = { start: formatHour(h), end: formatHour(h + dur) }
+      return proIds.some((uid) => !slotOverlapsAny(slot, unavailMap.get(uid) ?? []))
+    })
+  }
+  return available
+}
+
+function syncAvailabilityForSelectedDate() {
+  const d = date.value
+  if (!d) {
+    availableStartHoursList.value = []
+    return
+  }
+  const list = weekAvailabilityMap.value[d]
+  if (list) {
+    availableStartHoursList.value = list
+    if (startHour.value != null && !list.includes(startHour.value)) {
+      startHour.value = null
+    }
+  } else {
+    availableStartHoursList.value = []
+    if (Object.keys(weekAvailabilityMap.value).length > 0) {
+      startHour.value = null
+    }
+  }
+}
+
+async function loadWeekData() {
+  const dur = durationHours.value
+  const kind = props.bookingKind
+  if (dur == null || !kind) {
+    weekAvailabilityMap.value = {}
+    occupiedHoursByDate.value = {}
     availableStartHoursList.value = []
     return
   }
   loadingSlots.value = true
   try {
-    const inges = await listUsersByRole('inge')
-    const ingeIds = inges.map((i) => i.uid)
-    const unavailMap =
-      ingeIds.length > 0
-        ? await getSlotsForUsersOnDate(ingeIds, d)
-        : new Map<string, { start: string; end: string }[]>()
-    const hours = getAvailableStartHours(dur)
-    const booked = await listSessionsForDate(d)
-    const blocks: SessionBlock[] = booked.map((s) => ({
-      date: s.date,
-      startTime: s.startTime,
-      endTime: s.endTime,
-    }))
-    let available = filterOutBookedSlots(hours, d, dur, blocks)
-    if (ingeIds.length > 0) {
-      available = available.filter((h) => {
-        const slot = { start: formatHour(h), end: formatHour(h + dur) }
-        return ingeIds.some((uid) => !slotOverlapsAny(slot, unavailMap.get(uid) ?? []))
-      })
+    const dates = getWeekDateStrings(slotWeekStart.value)
+    const availEntries: [string, number[]][] = []
+    const occEntries: [string, number[]][] = []
+    for (const ds of dates) {
+      const booked = await listSessionsForDate(ds)
+      const available = await computeAvailableStartsForDate(ds, booked)
+      availEntries.push([ds, available])
+      const occ = new Set<number>()
+      for (const s of booked) {
+        for (let h = 0; h <= 23; h++) {
+          if (hourBlockOverlapsSession(h, s.startTime, s.endTime)) occ.add(h)
+        }
+      }
+      occEntries.push([ds, [...occ]])
     }
-    availableStartHoursList.value = available
-    if (startHour.value != null && !availableStartHoursList.value.includes(startHour.value)) {
-      startHour.value = null
-    }
+    weekAvailabilityMap.value = Object.fromEntries(availEntries)
+    occupiedHoursByDate.value = Object.fromEntries(occEntries)
+    syncAvailabilityForSelectedDate()
   } catch {
+    weekAvailabilityMap.value = {}
+    occupiedHoursByDate.value = {}
     availableStartHoursList.value = []
   } finally {
     loadingSlots.value = false
   }
 }
 
+function addDays(d: Date, n: number): Date {
+  const x = new Date(d)
+  x.setDate(x.getDate() + n)
+  return x
+}
+
+function prevSlotWeek() {
+  if (durationHours.value == null) return
+  slotWeekStart.value = addDays(slotWeekStart.value, -7)
+}
+
+function nextSlotWeek() {
+  if (durationHours.value == null) return
+  slotWeekStart.value = addDays(slotWeekStart.value, 7)
+}
+
+function onSlotPick(payload: { dateStr: string; hour: number }) {
+  date.value = payload.dateStr
+  startHour.value = payload.hour
+  syncAvailabilityForSelectedDate()
+}
+
+function emitBackKind() {
+  emit('backKind')
+}
+
 watch(
-  [date, durationHours],
+  [slotWeekStart, durationHours, () => props.bookingKind],
   () => {
-    loadAvailableSlots()
+    const dates = getWeekDateStrings(slotWeekStart.value)
+    if (date.value && !dates.includes(date.value)) {
+      date.value = ''
+      startHour.value = null
+    }
+    loadWeekData()
   },
   { immediate: true },
 )
 
-const calendarDays = computed(() => {
-  const y = calendarMonth.value.getFullYear()
-  const m = calendarMonth.value.getMonth()
-  const first = new Date(y, m, 1)
-  const startOffset = first.getDay() === 0 ? 6 : first.getDay() - 1
-  const daysInMonth = new Date(y, m + 1, 0).getDate()
-  const today = new Date().toISOString().slice(0, 10)
-  const days: { day: number | null; dateStr: string; disabled: boolean; available: boolean }[] = []
-  for (let i = 0; i < startOffset; i++) {
-    days.push({ day: null, dateStr: '', disabled: true, available: false })
-  }
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dateStr = `${y}-${String(m + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
-    const disabled = dateStr < today
-    days.push({ day, dateStr, disabled, available: !disabled })
-  }
-  return days
+watch(date, () => {
+  syncAvailabilityForSelectedDate()
 })
 
-const calendarMonthLabel = computed(() => {
+const slotSummaryLine = computed(() => {
+  if (!date.value || startHour.value == null || !durationHours.value) return ''
+  const d = new Date(date.value + 'T12:00:00')
+  const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi']
   const months = [
     'Janvier',
     'Février',
@@ -198,30 +430,9 @@ const calendarMonthLabel = computed(() => {
     'Novembre',
     'Décembre',
   ]
-  return `${months[calendarMonth.value.getMonth()]} ${calendarMonth.value.getFullYear()}`
+  const end = startHour.value + durationHours.value
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} - ${String(startHour.value).padStart(2, '0')}:00 ${String(end).padStart(2, '0')}:00`
 })
-
-function prevMonth() {
-  calendarMonth.value = new Date(
-    calendarMonth.value.getFullYear(),
-    calendarMonth.value.getMonth() - 1,
-    1,
-  )
-}
-
-function nextMonth() {
-  calendarMonth.value = new Date(
-    calendarMonth.value.getFullYear(),
-    calendarMonth.value.getMonth() + 1,
-    1,
-  )
-}
-
-function selectCalendarDate(dateStr: string) {
-  if (!dateStr) return
-  date.value = dateStr
-  loadAvailableSlots()
-}
 
 function formatHour(h: number) {
   return `${h.toString().padStart(2, '0')}:00`
@@ -246,6 +457,7 @@ watch(
 const handleBook = async () => {
   localError.value = null
   success.value = null
+  if (useBookingWizard.value && bookingStep.value !== 3) return
   if (!canBook.value) {
     localError.value = 'Renseigne ton email, la durée, la date et l’heure.'
     return
@@ -267,12 +479,14 @@ const handleBook = async () => {
     const endTime = formatHour(startHour.value! + durationHours.value!)
     const email = (contactEmail.value.trim() || currentUser.value?.email || '').trim()
 
-    await bookSession({
+    const createdSessionId = await bookSession({
       date: date.value,
       startTime,
       endTime,
-      style: '',
-      reservationName: reservationName.value.trim(),
+      style: sessionStyleLabel.value,
+      reservationName: artistFullName.value,
+      bookerPhone: contactPhone.value.trim(),
+      bookerNotes: bookerNotes.value.trim() || undefined,
       bookerProdUrl,
       bookerProdFileName,
       durationHours: durationHours.value!,
@@ -280,17 +494,25 @@ const handleBook = async () => {
       depositAmount: depositAmount.value,
       contactEmail: email || undefined,
     })
+
+    // Afficher l’écran "PAIEMENT EN COURS..." pendant le lancement de la pop-up PayPal
+    paymentModalOpen.value = true
+    paymentModalSessionId.value = createdSessionId
+    await nextTick()
+    await initPaypalBooking(createdSessionId, depositAmount.value)
+
     try {
-      const inges = await listUsersByRole('inge')
-      const ingeIds = inges.map((i) => i.uid)
+      const notifyRole = props.bookingKind === 'beatmaker' ? 'beatmaker' : 'inge'
+      const pros = await listUsersByRole(notifyRole)
+      const proIds = pros.map((p) => p.uid)
       const unavailMap =
-        ingeIds.length > 0 ? await getSlotsForUsersOnDate(ingeIds, date.value) : new Map()
+        proIds.length > 0 ? await getSlotsForUsersOnDate(proIds, date.value) : new Map()
       const sessionSlot = { start: startTime, end: endTime }
-      const concerned = inges.filter(
-        (i) => !slotOverlapsAny(sessionSlot, unavailMap.get(i.uid) ?? []),
+      const concerned = pros.filter(
+        (p) => !slotOverlapsAny(sessionSlot, unavailMap.get(p.uid) ?? []),
       )
-      const recipientEmails = concerned.map((i) => i.email).filter(Boolean) as string[]
-      const recipientPhones = concerned.map((i) => i.phone).filter(Boolean) as string[]
+      const recipientEmails = concerned.map((p) => p.email).filter(Boolean) as string[]
+      const recipientPhones = concerned.map((p) => p.phone).filter(Boolean) as string[]
       await $fetch('/api/notify-booking', {
         method: 'POST',
         body: {
@@ -299,7 +521,7 @@ const handleBook = async () => {
             startTime,
             endTime,
             bookerEmail: email || null,
-            style: '',
+            style: sessionStyleLabel.value,
             durationHours: durationHours.value,
             totalPrice: totalPrice.value,
           },
@@ -331,13 +553,6 @@ const handleBook = async () => {
         console.error('Send booking confirmation', e)
       }
     }
-    success.value = 'Session réservée. Payer l’acompte ci‑dessous.'
-    reservationName.value = ''
-    durationHours.value = null
-    date.value = ''
-    startHour.value = null
-    bookerProdFile.value = null
-    await listForCurrentBooker()
   } catch (e: any) {
     localError.value = e?.message ?? 'Erreur lors de la réservation.'
     uploadingProd.value = false
@@ -356,6 +571,10 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
     const valueApi = (typeof deposit === 'number' ? deposit : 50).toFixed(2)
     paypal
       .Buttons({
+        // Forcer l’interface PayPal (pas “Debit or Credit Card”).
+        // Format simple pour compatibilité SDK.
+        fundingSource: paypal?.FUNDING?.PAYPAL ?? undefined,
+        disableFunding: 'card',
         createOrder: (_data: any, actions: any) =>
           actions.order.create({
             purchase_units: [
@@ -369,14 +588,24 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
           await actions.order.capture()
           const orderId = data?.orderID
           success.value = 'Paiement PayPal effectué, en attente de confirmation ingé.'
+          paymentModalOpen.value = false
+          paymentModalSessionId.value = null
           try {
             await updateSessionStatus(sessionId, 'pending', orderId)
           } catch (e) {
             console.error(e)
           }
+
+          // Rafraîchir l'état (utile pour l'écran "Mes réservations")
+          await listForCurrentBooker()
+
+          showPaymentResult('success')
         },
         onError: () => {
           paypalError.value = 'Erreur lors du paiement PayPal.'
+          paymentModalOpen.value = false
+          paymentModalSessionId.value = null
+          showPaymentResult('error')
         },
       })
       .render(`#paypal-button-${sessionId}`)
@@ -388,6 +617,12 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
 
 const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPrice ?? 50) * 0.3)
 
+const noSlotsHint = computed(() =>
+  props.bookingKind === 'beatmaker'
+    ? 'Aucun créneau disponible pour cette date avec la durée choisie. Les beatmakers ont-ils bien enregistré leurs dispos pour ce jour ?'
+    : 'Aucun créneau disponible pour cette date avec la durée choisie. Les ingés ont-ils bien enregistré leurs dispos pour ce jour ?',
+)
+
 /** Reste à payer : valeur stockée ou calculée (total - acompte). */
 function restToPayForSession(s: any): number {
   if (s.remainingToPay !== undefined && s.remainingToPay !== null) return s.remainingToPay
@@ -397,50 +632,61 @@ function restToPayForSession(s: any): number {
 
 <template>
   <div class="space-y-8">
-    <template v-if="showReserver">
-      <h2 class="pds-h2">Réserver une session</h2>
-
-      <!-- Nom de la réservation -->
-      <div>
-        <h3 class="pds-subtitle mb-2">Nom de la réservation</h3>
-        <input
-          v-model="reservationName"
-          type="text"
-          class="pds-input w-full max-w-md"
-          placeholder="Exemple : Session EP, Mix single, etc."
-        />
+    <!-- Écrans succès / échec (6 secondes) -->
+    <div
+      v-if="paymentResult"
+      class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[95] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+    >
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div class="absolute inset-0 pointer-events-none z-0">
+        <FigmaLandingBackground variant="slot" />
       </div>
 
-      <!-- Email de contact -->
-      <div class="mt-4">
-        <h3 class="pds-subtitle mb-2">Ton email</h3>
-        <input
-          v-model="contactEmail"
-          type="email"
-          class="pds-input w-full max-w-md"
-          :disabled="!!currentUser?.email"
-          placeholder="ton.email@example.com"
-        />
-        <p class="mt-1 text-xs text-[var(--pds-muted)]">
-          Nous utiliserons cet email pour t’envoyer la confirmation, le récap et les pistes livrées
-          par l’ingé.
-        </p>
-      </div>
-
-      <!-- Tarifs -->
-      <div class="pds-card">
-        <div class="price-line mb-2 text-lg text-[var(--pds-text)]">
-          <strong class="text-[var(--pds-primary)]">50€</strong> / heure en semaine
+      <div class="relative z-10 flex w-full flex-col items-center gap-6 px-6 text-center">
+        <div
+          v-if="paymentResult === 'success'"
+          class="mt-2 inline-flex h-[60px] w-[60px] items-center justify-center rounded-full border border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <path d="M20 6L9 17l-5-5" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </div>
-        <div class="price-line mb-2 text-lg text-[var(--pds-text)]">
-          <strong class="text-[var(--pds-primary)]">60€</strong> / heure le week-end
+        <div
+          v-else
+          class="mt-2 inline-flex h-[60px] w-[60px] items-center justify-center rounded-full border border-red-400/50 bg-red-400/10 text-red-300"
+        >
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+            <path d="M18 6L6 18M6 6l12 12" stroke-linecap="round" stroke-linejoin="round" />
+          </svg>
         </div>
-        <p class="location-info mt-4 text-sm leading-relaxed text-[var(--pds-muted2)]">
-          Studio situé en banlieue ouest parisienne.<br />
-          L'adresse sera envoyée après confirmation.
-        </p>
-      </div>
 
+        <h2
+          class="font-[Raleway,sans-serif] text-[42px] font-extrabold uppercase tracking-wide text-white sm:text-[50px]"
+        >
+          {{ paymentResult === 'success' ? 'PAIEMENT RÉALISÉ AVEC SUCCÈS' : 'ÉCHEC DU PAIEMENT' }}
+        </h2>
+
+        <p v-if="paymentResult === 'success'" class="max-w-[740px] text-sm text-white/80 sm:text-base">
+          Votre réservation est confirmée !<br />
+          Vous allez recevoir un email de confirmation avec tous les détails de votre séance (date, heure, studio
+          et informations requises).
+        </p>
+
+        <button
+          type="button"
+          class="mt-2 rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10"
+          @click="goHomeNow"
+        >
+          Retour à l'accueil
+        </button>
+      </div>
+    </div>
+
+    <template v-if="showReserver && useBookingWizard && bookingKind">
+      <!-- Étape 1 : durée + date + heure -->
+      <div v-show="bookingStep === 1" class="space-y-8">
       <!-- Durée (2h à 12h) -->
       <div>
         <h3 class="pds-subtitle mb-4">Combien d’heures souhaitez-vous réserver ? (2h minimum)</h3>
@@ -450,152 +696,313 @@ function restToPayForSession(s: any): number {
             {{ h }} heure{{ h > 1 ? 's' : '' }}
           </option>
         </select>
+        <p v-if="!durationHours" class="mt-2 text-sm text-[var(--pds-muted2)]">
+          La grille ci-dessous s’active dès que tu as choisi une durée.
+        </p>
       </div>
 
-      <!-- Calendrier -->
-      <div v-if="canChooseDate" class="space-y-3">
-        <h3 class="pds-subtitle">Choisissez une date</h3>
-        <div class="pds-card p-4">
-          <div class="calendar-header mb-4 flex items-center justify-between">
-            <button
-              type="button"
-              class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
-              @click="prevMonth"
-            >
-              ‹
-            </button>
-            <span class="font-medium text-[var(--pds-text)]">{{ calendarMonthLabel }}</span>
-            <button
-              type="button"
-              class="rounded px-2 py-1 text-[var(--pds-primary)] hover:bg-[var(--pds-primary)]/10"
-              @click="nextMonth"
-            >
-              ›
-            </button>
-          </div>
-          <div class="calendar-grid grid grid-cols-7 gap-1 sm:gap-2">
-            <div
-              v-for="(d, di) in ['L', 'M', 'M', 'J', 'V', 'S', 'D']"
-              :key="di"
-              class="text-center text-xs font-medium text-[var(--pds-muted)]"
-            >
-              {{ d }}
-            </div>
-            <button
-              v-for="(cell, idx) in calendarDays"
-              :key="idx"
-              type="button"
-              class="calendar-day flex aspect-square items-center justify-center rounded-lg border text-sm transition-colors"
-              :class="{
-                'cursor-default border-transparent bg-transparent': cell.day == null,
-                'cursor-not-allowed opacity-40': cell.disabled && cell.day != null,
-                'border-[var(--pds-primary)] bg-[var(--pds-primary)] text-white':
-                  date === cell.dateStr,
-                'border-[var(--pds-border)] bg-[var(--pds-bg)] hover:border-[var(--pds-primary)]':
-                  cell.day != null && !cell.disabled && date !== cell.dateStr,
-                'border-[var(--pds-border)] bg-[var(--pds-bg)]':
-                  cell.day != null && !cell.disabled && date !== cell.dateStr,
-              }"
-              :disabled="cell.day == null || cell.disabled"
-              @click="selectCalendarDate(cell.dateStr)"
-            >
-              {{ cell.day ?? '' }}
-            </button>
-          </div>
+      <!-- Grille semaine × 24 h : visible tout de suite, inactive sans durée -->
+      <div v-if="bookingKind" class="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-6">
+        <div class="pointer-events-none absolute inset-0 min-h-[560px]">
+          <FigmaLandingBackground variant="slot" />
         </div>
-      </div>
-
-      <!-- Heure de début -->
-      <div v-if="date && durationHours" class="space-y-3">
-        <h3 class="pds-subtitle">Heure de début</h3>
-        <div v-if="loadingSlots" class="min-h-[80px] text-sm text-[var(--pds-muted)]">
-          Chargement des créneaux...
-        </div>
-        <div
-          v-else-if="availableStartHoursList.length === 0"
-          class="min-h-[48px] text-sm text-amber-400"
-        >
-          Aucun créneau disponible pour cette date avec la durée choisie. Les pros ont-ils bien
-          enregistré leurs dispos pour ce jour ?
-        </div>
-        <div v-else class="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          <button
-            v-for="h in availableStartHoursList"
-            :key="h"
-            type="button"
-            class="pds-option !py-3 min-h-[48px] touch-manipulation"
-            :class="{ selected: startHour === h }"
-            @click="startHour = h"
-          >
-            {{ h }}h00
-          </button>
-        </div>
-      </div>
-
-      <!-- Résumé -->
-      <div v-if="canBook" class="pds-summary">
-        <div class="pds-summary-line">
-          <span>Nom</span>
-          <strong>{{ reservationName }}</strong>
-        </div>
-        <div class="pds-summary-line">
-          <span>Date</span>
-          <strong>{{
-            selectedDate?.toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              day: 'numeric',
-              month: 'long',
-              year: 'numeric',
-            })
-          }}</strong>
-        </div>
-        <div class="pds-summary-line">
-          <span>Horaire</span>
-          <strong>{{ summaryTimeRange }}</strong>
-        </div>
-        <div class="pds-summary-line">
-          <span>Durée</span>
-          <strong>{{ durationHours }}h</strong>
-        </div>
-        <div class="pds-summary-line">
-          <span>Prix total</span>
-          <strong>{{ totalPrice }}€</strong>
-        </div>
-        <div class="pds-summary-line border-t border-[var(--pds-border)] pt-3">
-          <span>Acompte (30%)</span>
-          <strong>{{ depositAmount }}€</strong>
-        </div>
-      </div>
-
-      <!-- Upload prod (optionnel) -->
-      <div class="pds-card space-y-4">
-        <div class="form-group">
-          <label class="pds-label">Uploader ma prod (optionnel)</label>
-          <input
-            type="file"
-            accept="audio/*"
-            class="w-full text-sm text-[var(--pds-text)] file:mr-3 file:rounded-md file:border-0 file:bg-[var(--pds-primary)] file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-white"
-            @change="handleBookerProdFileChange"
+        <div class="relative z-10 space-y-4 px-4 py-8 sm:px-6 sm:py-10">
+          <BookingSlotGrid
+            :week-start-monday="slotWeekStart"
+            :duration-hours="durationHours"
+            :model-date="date"
+            :model-start-hour="startHour"
+            :loading="loadingSlots"
+            :available-starts-by-date="weekAvailabilityMap"
+            :occupied-hours-by-date="occupiedHoursByDate"
+            @pick="onSlotPick"
+            @prev-week="prevSlotWeek"
+            @next-week="nextSlotWeek"
           />
-          <p v-if="bookerProdFile" class="mt-1 text-sm text-[var(--pds-muted)]">
-            {{ bookerProdFile?.name }}
+          <p
+            v-if="
+              durationHours &&
+              !loadingSlots &&
+              (weekHasNoSlots || (date && availableStartHoursList.length === 0))
+            "
+            class="text-sm text-amber-400"
+          >
+            {{ noSlotsHint }}
           </p>
         </div>
       </div>
 
-      <p v-if="localError || sessionsError" class="text-sm text-red-400">
-        {{ localError || sessionsError }}
-      </p>
-      <p v-if="success" class="text-sm text-emerald-400">
-        {{ success }}
-      </p>
-      <button
-        class="btn-primary w-full"
-        :disabled="!canBook || sessionsLoading || uploadingProd"
-        @click="handleBook"
-      >
-        {{ uploadingProd ? 'Envoi de la prod...' : 'Réserver ce créneau' }}
-      </button>
+        <div
+          class="mt-8 flex flex-col gap-6 pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-8"
+        >
+          <p
+            class="min-h-[1.25rem] font-[Raleway,sans-serif] text-lg font-bold leading-tight text-white md:text-2xl"
+          >
+            {{ slotSummaryLine }}
+          </p>
+          <div class="flex flex-wrap items-center justify-end gap-3 sm:gap-4">
+            <button
+              type="button"
+              class="rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10"
+              @click="emitBackKind"
+            >
+              Retour
+            </button>
+            <button
+              type="button"
+              class="rounded-full bg-gradient-to-r from-[#0073FF] to-[#64E8FF] px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-black transition enabled:hover:opacity-95 disabled:opacity-50"
+              :disabled="!canProceedSlotStep"
+              @click="nextBookingStep"
+            >
+              Continuer
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Étape 2 : information artiste (maquette) -->
+      <div v-show="bookingStep === 2" class="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-6">
+        <div class="pointer-events-none absolute inset-0 min-h-[520px]">
+          <FigmaLandingBackground variant="slot" />
+        </div>
+        <div class="relative z-10 px-4 py-10 sm:px-6 sm:py-14">
+          <div class="mx-auto w-full max-w-[615px] space-y-10">
+            <h2
+              class="font-[Raleway,sans-serif] text-3xl font-extrabold uppercase leading-none tracking-tight text-white sm:text-4xl md:text-[50px] md:leading-[0.76]"
+            >
+              Information artiste
+            </h2>
+            <div class="flex flex-col gap-5">
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-[15px]">
+                <input
+                  v-model="artistFirstName"
+                  type="text"
+                  autocomplete="given-name"
+                  placeholder="Prénom"
+                  class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+                />
+                <input
+                  v-model="artistLastName"
+                  type="text"
+                  autocomplete="family-name"
+                  placeholder="Nom"
+                  class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+                />
+              </div>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-[15px]">
+                <input
+                  v-model="contactPhone"
+                  type="tel"
+                  autocomplete="tel"
+                  placeholder="Téléphone"
+                  class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+                />
+                <input
+                  v-model="contactEmail"
+                  type="email"
+                  autocomplete="email"
+                  :disabled="!!currentUser?.email"
+                  placeholder="Email"
+                  class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70 disabled:opacity-60"
+                />
+              </div>
+              <textarea
+                v-model="bookerNotes"
+                rows="5"
+                placeholder="Informations complémentaires"
+                class="min-h-[132px] w-full resize-y rounded-[15px] border border-white/50 bg-[#0f0f0f] px-5 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+              />
+              <div class="rounded-[15px] border border-dashed border-white/20 bg-black/20 px-4 py-3">
+                <span class="block text-xs font-medium text-white/60">Fichier audio (optionnel)</span>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  class="mt-2 w-full text-sm text-white/80 file:mr-3 file:rounded-full file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-sm file:font-medium file:text-white"
+                  @change="handleBookerProdFileChange"
+                />
+                <p v-if="bookerProdFile" class="mt-2 text-sm text-white/50">
+                  {{ bookerProdFile?.name }}
+                </p>
+              </div>
+            </div>
+            <div class="flex flex-wrap gap-[15px]">
+              <button
+                type="button"
+                class="rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10"
+                @click="prevBookingStep"
+              >
+                Retour
+              </button>
+              <button
+                type="button"
+                class="rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+                :disabled="!canProceedContactStep"
+                @click="nextBookingStep"
+              >
+                Continuer
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Étape 3 : récapitulatif (maquette) -->
+      <div v-show="bookingStep === 3" class="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-6">
+        <div class="pointer-events-none absolute inset-0 min-h-[560px]">
+          <FigmaLandingBackground variant="slot" />
+        </div>
+        <!-- Overlay pendant que PayPal est lancé -->
+        <div
+          v-if="paymentModalOpen && paymentModalSessionId"
+          class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[80] flex items-center justify-center"
+        >
+          <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+          <div class="absolute inset-0 pointer-events-none z-0">
+            <FigmaLandingBackground variant="slot" />
+            <h2
+              class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-[Raleway,sans-serif] text-[42px] font-extrabold uppercase tracking-wide text-white sm:text-[50px]"
+            >
+              PAIEMENT EN COURS...
+            </h2>
+          </div>
+          <div class="relative z-10 w-full px-4">
+            <div class="mx-auto w-fit pointer-events-auto">
+              <div :id="`paypal-button-${paymentModalSessionId}`" />
+            </div>
+          </div>
+        </div>
+
+        <div class="relative z-10 px-4 py-10 sm:px-6 sm:py-14">
+          <div
+            v-if="canProceedSlotStep && canProceedContactStep"
+            class="mx-auto flex max-w-[1205px] flex-col gap-12 lg:gap-[50px]"
+          >
+              <h2
+                class="font-[Raleway,sans-serif] text-3xl font-extrabold uppercase leading-none tracking-tight text-white sm:text-4xl md:text-[50px] md:leading-[0.76]"
+              >
+                Récapitulatif
+              </h2>
+
+              <div
+                class="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-center lg:gap-16 xl:gap-[120px]"
+              >
+                <!-- Colonne gauche : information artiste -->
+                <div class="flex w-full max-w-[400px] flex-col gap-8 lg:max-w-[320px]">
+                  <h3
+                    class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white md:text-[30px] md:leading-5"
+                  >
+                    Information Artiste
+                  </h3>
+                  <dl class="flex flex-col gap-5 font-[Raleway,sans-serif] text-lg font-medium text-white">
+                    <div class="flex flex-col gap-1">
+                      <dt>Prénom</dt>
+                      <dd class="text-white/90">{{ artistFirstName }}</dd>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <dt>Nom</dt>
+                      <dd class="text-white/90">{{ artistLastName }}</dd>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <dt>Email</dt>
+                      <dd class="break-all text-white/90">{{ recapEmailDisplay }}</dd>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <dt>Téléphone</dt>
+                      <dd class="text-white/90">{{ contactPhone }}</dd>
+                    </div>
+                    <div v-if="bookerNotes.trim()" class="flex flex-col gap-1">
+                      <dt>Informations complémentaires</dt>
+                      <dd class="whitespace-pre-wrap text-white/90">{{ bookerNotes }}</dd>
+                    </div>
+                  </dl>
+                  <button
+                    type="button"
+                    class="w-fit rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:border-transparent hover:bg-gradient-to-r hover:from-[#0073FF] hover:to-[#64E8FF] hover:text-black"
+                    @click="prevBookingStep"
+                  >
+                    Retour
+                  </button>
+                </div>
+
+                <div class="h-px w-full bg-white/30 lg:hidden" aria-hidden="true" />
+
+                <!-- Séparateur vertical (desktop) -->
+                <div
+                  class="hidden h-auto min-h-[220px] w-px shrink-0 bg-white/80 lg:block"
+                  aria-hidden="true"
+                />
+
+                <!-- Colonne droite : résumé commande -->
+                <div class="flex w-full max-w-[420px] flex-col gap-8">
+                  <h3
+                    class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white md:text-[30px] md:leading-5"
+                  >
+                    Résumé de la commande
+                  </h3>
+                  <div class="flex flex-col gap-5 font-[Raleway,sans-serif] text-lg font-medium text-white">
+                    <p>{{ recapSessionLine }}</p>
+                    <div class="flex items-start gap-2.5">
+                      <span class="mt-0.5 inline-flex h-[15px] w-[15px] shrink-0 text-white" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <span>{{ durationHours }}h</span>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                      <span class="mt-0.5 inline-flex h-[15px] w-[15px] shrink-0 text-white" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <rect x="3" y="5" width="18" height="16" rx="2" />
+                          <path d="M3 10h18" />
+                          <path d="M8 3v4M16 3v4" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <span class="capitalize">{{ recapDateLabel }}</span>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                      <span class="mt-0.5 inline-flex h-[15px] w-[15px] shrink-0 text-white" aria-hidden="true">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <circle cx="12" cy="12" r="9" />
+                          <path d="M12 7v5l3 2" stroke-linecap="round" />
+                        </svg>
+                      </span>
+                      <span>{{ recapTimeRangeLabel }}</span>
+                    </div>
+                  </div>
+                  <p class="text-sm text-white/60">
+                    Total {{ totalPrice }}€ · Acompte 30% {{ depositAmount }}€
+                  </p>
+                  <button
+                    type="button"
+                    class="w-full max-w-[280px] rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
+                    :disabled="paymentModalOpen || !canBook || sessionsLoading || uploadingProd"
+                    @click="handleBook"
+                  >
+                    {{
+                      uploadingProd
+                        ? 'Envoi de la prod…'
+                        : sessionsLoading
+                          ? 'Patienter…'
+                          : 'Confirmer et payer'
+                    }}
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p v-else class="text-center text-sm text-white/70">
+              Complète les étapes précédentes pour voir le récapitulatif.
+            </p>
+        </div>
+        <div class="relative z-10 px-4 pb-8 sm:px-6">
+          <p v-if="localError || sessionsError" class="text-sm text-red-400">
+            {{ localError || sessionsError }}
+          </p>
+          <p v-if="success" class="text-sm text-emerald-400">
+            {{ success }}
+          </p>
+        </div>
+      </div>
     </template>
 
     <!-- Liste des sessions -->

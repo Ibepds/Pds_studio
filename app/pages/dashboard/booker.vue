@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import { definePageMeta, navigateTo } from '#imports'
+import { definePageMeta } from '#imports'
 import { useRoute } from 'vue-router'
-import { useAuth } from '../../../composables/useAuth'
 
 definePageMeta({
   middleware: 'require-auth',
@@ -9,12 +8,6 @@ definePageMeta({
 })
 
 const route = useRoute()
-const { currentUser, logout } = useAuth()
-
-const handleLogout = async () => {
-  await logout()
-  await navigateTo('/')
-}
 
 const navLinks = [
   { to: '/dashboard/booker/reserver', label: 'Réserver une session' },
@@ -27,35 +20,27 @@ function isActive(to: string) {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <header
-      class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--pds-border)] pb-4"
-    >
-      <div>
-        <h1 class="pds-h2 text-xl">Tableau de bord – Booker</h1>
-        <p class="pds-subtitle mt-1">
-          {{ currentUser?.email }}
-        </p>
+  <section class="booker-dashboard font-[Raleway,sans-serif] text-white">
+    <div class="mx-auto w-full max-w-[1440px] px-6 pb-10 pt-4 sm:px-[120px] sm:pb-12 sm:pt-6">
+      <nav class="flex flex-wrap gap-2 border-b border-white/10 pb-5 sm:gap-3">
+        <NuxtLink
+          v-for="link in navLinks"
+          :key="link.to"
+          :to="link.to"
+          class="rounded-full border px-4 py-2 text-sm font-medium transition-colors sm:px-5"
+          :class="
+            isActive(link.to)
+              ? 'border-[var(--pds-primary)] bg-[var(--pds-primary)]/20 text-white'
+              : 'border-white/20 text-white/70 hover:border-white/40 hover:text-white'
+          "
+        >
+          {{ link.label }}
+        </NuxtLink>
+      </nav>
+
+      <div class="pt-6 sm:pt-8">
+        <NuxtPage />
       </div>
-      <button type="button" class="btn-secondary" @click="handleLogout">Déconnexion</button>
-    </header>
-
-    <nav class="flex flex-wrap gap-2 border-b border-[var(--pds-border)] pb-4">
-      <NuxtLink
-        v-for="link in navLinks"
-        :key="link.to"
-        :to="link.to"
-        class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-        :class="
-          isActive(link.to)
-            ? 'bg-[var(--pds-primary)]/20 text-[var(--pds-primary)]'
-            : 'text-[var(--pds-muted)] hover:text-[var(--pds-text)] hover:bg-[var(--pds-border)]/50'
-        "
-      >
-        {{ link.label }}
-      </NuxtLink>
-    </nav>
-
-    <NuxtPage />
+    </div>
   </section>
 </template>

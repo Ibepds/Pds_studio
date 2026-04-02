@@ -1,4 +1,14 @@
 /* PDS Studio – thème global */
+html {
+  margin: 0;
+  background-color: #000000;
+}
+
+#__nuxt {
+  min-height: 100dvh;
+  background-color: #000000;
+}
+
 :root {
   --pds-bg: #0a0a0a;
   --pds-card: #151515;
@@ -9,6 +19,8 @@
   --pds-primary: #4a9eff;
   --pds-primary-hover: #62b0ff;
   --pds-primary-shadow: rgba(74, 158, 255, 0.25);
+  /* Survol boutons : Figma linear #0073FF → #64E8FF */
+  --pds-hover-gradient: linear-gradient(90deg, #0073ff 0%, #64e8ff 100%);
   --pds-radius: 12px;
   --pds-radius-lg: 16px;
   --pds-input-padding: 14px;
@@ -17,10 +29,12 @@
 }
 
 body {
+  margin: 0;
   font-family: var(--pds-font);
   background: var(--pds-bg);
   color: var(--pds-text);
   min-height: 100vh;
+  min-height: 100dvh;
 }
 
 /* Bouton principal */
@@ -38,8 +52,9 @@ body {
   box-shadow: 0 8px 20px var(--pds-primary-shadow);
 }
 .btn-primary:hover:not(:disabled) {
+  background: var(--pds-hover-gradient);
   transform: translateY(-2px);
-  box-shadow: 0 12px 28px rgba(74, 158, 255, 0.35);
+  box-shadow: 0 12px 28px rgba(0, 115, 255, 0.35);
 }
 .btn-primary:disabled {
   opacity: 0.5;
@@ -58,9 +73,18 @@ body {
   transition: all 0.3s ease;
   font-weight: 400;
 }
-.btn-secondary:hover {
-  border-color: var(--pds-primary);
-  color: var(--pds-primary);
+.btn-secondary:hover:not(:disabled) {
+  background-image: var(--pds-hover-gradient);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+/* Actions destructrices : garder un survol rouge */
+button.btn-secondary.text-red-400:hover:not(:disabled) {
+  background-image: none;
+  background-color: rgba(239, 68, 68, 0.12);
+  color: rgb(252, 165, 165);
+  border-color: rgb(248, 113, 113);
 }
 
 /* Cartes / blocs */
@@ -127,13 +151,21 @@ body {
   font-weight: 400;
 }
 .pds-option:hover {
-  border-color: var(--pds-primary);
+  border-color: rgba(255, 255, 255, 0.5);
+  background-image: var(--pds-hover-gradient);
+  color: #fff;
 }
 .pds-option.selected {
   background: var(--pds-primary);
   border-color: var(--pds-primary);
   color: #fff;
   font-weight: 500;
+}
+.pds-option.selected:hover {
+  background-image: var(--pds-hover-gradient);
+  background-color: transparent;
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
 }
 
 /* Résumé réservation */
@@ -214,4 +246,37 @@ body {
     min-height: 32px;
     font-size: 0.8rem;
   }
+}
+
+/* Pilules nav, CTA accueil / réservation, auth — même dégradé au survol */
+.nav-pill:hover,
+.nav-pill-icon:hover,
+.home-nav-cta:hover,
+.nav-link-mobile-dark:hover,
+.home-hero-cta:hover,
+.home-choose-btn:hover {
+  background-image: var(--pds-hover-gradient);
+  background-color: transparent;
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.auth-pill-submit:hover:not(:disabled) {
+  background-image: var(--pds-hover-gradient);
+  border-color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+}
+
+/* Autres <button> (onglets, calendrier…) — sans écraser .btn-primary / .btn-secondary / .pds-option */
+button:not(.btn-primary):not(.btn-secondary):not(.pds-option):hover:not(:disabled):not([class*='border-red']) {
+  background-image: var(--pds-hover-gradient);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+input[type='submit']:hover:not(:disabled),
+input[type='button']:hover:not(:disabled) {
+  background-image: var(--pds-hover-gradient);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.5);
 }
