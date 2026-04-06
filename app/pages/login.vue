@@ -17,8 +17,11 @@ const onSubmit = async () => {
   submitting.value = true
   try {
     await login(email.value, password.value)
-    if (currentUser.value?.role) {
-      await router.push(`/dashboard/${currentUser.value.role}`)
+    const r = currentUser.value?.role
+    if (r === 'admin') {
+      await router.push('/admin/indicateurs')
+    } else if (r) {
+      await router.push(`/dashboard/${r}`)
     } else {
       await router.push('/dashboard')
     }
@@ -42,7 +45,7 @@ const roleFromQuery = computed(() => route.query.role as string | undefined)
     <div
       class="relative z-10 flex w-full flex-1 flex-col items-center justify-center px-6 py-12 sm:px-10 sm:py-16"
     >
-      <div class="w-full max-w-md">
+      <div class="w-full min-w-0 max-w-md">
         <h1
           class="mb-10 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white sm:text-4xl"
         >

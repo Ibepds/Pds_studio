@@ -73,14 +73,14 @@ export default defineEventHandler(async (event) => {
     <p><strong>🕒 Heure</strong> : ${hourLabel}</p>
     <p><strong>👥 Nombre de personnes autorisées</strong> : 4 maximum</p>
     <p>🚭 Le studio est strictement non-fumeur. Un espace extérieur est mis à disposition si nécessaire.</p>
-    <p>Veuillez respecter l’horaire afin de garantir le bon déroulement de votre séance.</p>
+    <p>Veuillez respecter l'horaire afin de garantir le bon déroulement de votre séance.</p>
     <p>Pour toute question ou information complémentaire, nous restons disponibles par retour de mail.</p>
     <p><strong>Conditions d'annulation :</strong></p>
     <ul>
       <li>L'acompte n'est pas remboursable en cas d'annulation moins de 48 heures avant la séance.</li>
       <li>Pour toute annulation effectuée plus de 48 heures avant, l'acompte pourra être reporté sur une autre date.</li>
     </ul>
-    <p>L’équipe PDS Records</p>
+    <p>L'équipe PDS Records</p>
   `
 
   const resendApiKey = config.resendApiKey as string

@@ -25,8 +25,8 @@ function choose(kind: BookingKindOption) {
 
 <template>
   <section
-    class="home-landing relative min-h-[100dvh] w-full overflow-hidden bg-black font-[Raleway,sans-serif]"
-    :class="fullBleed ? 'left-1/2 w-screen max-w-[100vw] -translate-x-1/2' : ''"
+    class="home-landing relative min-h-[100dvh] w-full min-w-0 overflow-x-clip bg-black font-[Raleway,sans-serif]"
+    :class="fullBleed ? 'left-1/2 w-[100vw] max-w-[100vw] -translate-x-1/2' : ''"
   >
     <FigmaLandingBackground />
 
@@ -34,10 +34,14 @@ function choose(kind: BookingKindOption) {
       <div class="shrink-0" :class="navSpacerClass" aria-hidden="true" />
 
       <div
-        class="flex flex-1 flex-col items-center justify-center gap-12 lg:flex-row lg:items-start lg:justify-center lg:gap-[200px]"
+        class="flex w-full min-w-0 flex-1 flex-col items-center justify-center gap-12 lg:flex-row lg:items-start lg:justify-center lg:gap-[200px]"
       >
-        <div class="flex w-full max-w-[299px] flex-col gap-[30px]">
-          <h1 class="text-[50px] font-extrabold uppercase leading-none text-white">Beatmaker</h1>
+        <div class="flex w-full min-w-0 max-w-[299px] flex-col gap-[30px]">
+          <h1
+            class="font-extrabold uppercase leading-none text-white [text-wrap:balance] text-[clamp(1.875rem,8vw,3.125rem)]"
+          >
+            Beatmaker
+          </h1>
           <div class="flex flex-col gap-[15px]">
             <p class="text-[15px] font-normal leading-[18px] text-white">
               Travaille avec un beatmaker pour créer une instru originale adaptée à ton style. Idéal pour composer un
@@ -66,8 +70,12 @@ function choose(kind: BookingKindOption) {
           </button>
         </div>
 
-        <div class="flex w-full max-w-[471px] flex-col gap-[30px]">
-          <h2 class="text-[50px] font-extrabold uppercase leading-none text-white">Ingénieur du son</h2>
+        <div class="flex w-full min-w-0 max-w-[471px] flex-col gap-[30px]">
+          <h2
+            class="font-extrabold uppercase leading-none text-white [text-wrap:balance] text-[clamp(1.875rem,8vw,3.125rem)]"
+          >
+            Ingénieur du son
+          </h2>
           <div class="flex flex-col gap-[15px]">
             <p class="text-[15px] font-normal leading-[18px] text-white">
               Enregistre ta voix ou tes instruments avec un ingénieur du son qui t'accompagne pendant toute la session. Il

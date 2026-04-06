@@ -9,13 +9,16 @@ export default defineNuxtConfig({
       title: "PDS — Studio d'enregistrement",
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        {
+          name: 'viewport',
+          content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
       ],
       link: [
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         {
           rel: 'stylesheet',
-          href: 'https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;800&display=swap',
+          href: 'https://fonts.googleapis.com/css2?family=Raleway:wght@400;500;700;800&display=swap',
         },
       ],
     },

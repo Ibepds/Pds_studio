@@ -5,15 +5,33 @@ import { useAuth } from '../composables/useAuth'
 
 const route = useRoute()
 const { currentUser, logout } = useAuth()
-/** Login + register : fond noir pleine largeur, footer masqué */
+/** Login + register : fond noir pleine largeur */
 const isAuthFullscreenPage = computed(
   () =>
     route.path === '/login' || route.path === '/register' || route.path === '/reserver',
 )
 
+/** Footer partout sauf formulaires auth plein écran */
+const showFooter = computed(
+  () => route.path !== '/login' && route.path !== '/register',
+)
+
 const isHomePage = computed(() => route.path === '/')
 /** Même fond plein largeur / noir que l’accueil & la zone BookingKind */
 const isBookerDashboard = computed(() => route.path.startsWith('/dashboard/booker'))
+/** Dashboard beatmaker / ingé : fond noir plein largeur (nav + contenu) */
+const isBeatmakerIngeDashboard = computed(
+  () =>
+    route.path.startsWith('/dashboard/beatmaker') ||
+    route.path.startsWith('/dashboard/inge'),
+)
+
+/** Admin : même shell noir + barre locale (email / déconnexion), sans « Mon compte » global */
+const isAdminPage = computed(() => route.path.startsWith('/admin'))
+
+const hideGlobalAccountNav = computed(
+  () => isBeatmakerIngeDashboard.value || isAdminPage.value,
+)
 const navOpen = ref(false)
 
 const userLabel = computed(() => {
@@ -40,6 +58,11 @@ const accountHref = computed(() => {
   return '/'
 })
 
+/** Libellé explicite pour les admins (sinon « Mon compte » ne renvoie pas vers /admin clairement). */
+const accountNavLabel = computed(() =>
+  currentUser.value?.role === 'admin' ? 'Administration' : 'Mon compte',
+)
+
 function closeNav() {
   navOpen.value = false
 }
@@ -54,19 +77,33 @@ async function handleLogout() {
 
 <template>
   <div
-    class="flex min-h-[100dvh] flex-col"
+    class="flex min-h-[100dvh] min-w-0 flex-col overflow-x-clip"
     :class="
-      isHomePage || isBookerDashboard ? 'bg-black' : 'bg-[var(--pds-bg)] text-[var(--pds-text)]'
+      isHomePage || isBookerDashboard || isBeatmakerIngeDashboard || isAdminPage
+        ? 'bg-black'
+        : 'bg-[var(--pds-bg)] text-[var(--pds-text)]'
     "
   >
     <!-- Navbar : sur l’accueil fond noir plein (pas transparent) + zone encoche -->
     <header
       class="sticky top-0 z-50 w-full bg-black pt-[env(safe-area-inset-top)]"
-      :class="isHomePage ? 'border-b border-transparent' : 'border-b border-white/10'"
+      :class="
+        isHomePage
+          ? 'border-b border-transparent'
+          : isBeatmakerIngeDashboard || isAdminPage
+            ? 'border-b-0'
+            : 'border-b border-white/10'
+      "
     >
       <nav
-        class="mx-auto flex w-full items-center justify-between gap-4 py-3 sm:py-4"
-        :class="isHomePage ? 'max-w-[1440px] px-6 sm:px-[120px]' : 'max-w-6xl px-4 sm:px-6'"
+        class="mx-auto flex w-full min-w-0 items-center justify-between gap-4 py-3 sm:py-4"
+        :class="
+          isHomePage
+            ? 'max-w-[1440px] px-4 sm:px-6 md:px-12 lg:px-[120px]'
+            : isBeatmakerIngeDashboard || isAdminPage
+              ? 'max-w-[1440px] px-4 sm:px-8 md:px-[120px]'
+              : 'max-w-6xl px-4 sm:px-6'
+        "
       >
         <NuxtLink
           to="/"
@@ -129,15 +166,18 @@ async function handleLogout() {
           </svg>
         </NuxtLink>
 
-        <!-- Desktop : état déconnecté = 2 pilules ; connecté = Mon compte -->
-        <div class="hidden items-center gap-2 sm:flex sm:gap-3">
+        <!-- Desktop : masqué sur dashboard beatmaker/ingé / admin (nav dédiée plus bas) -->
+        <div
+          v-if="!hideGlobalAccountNav"
+          class="hidden items-center gap-2 sm:flex sm:gap-3"
+        >
           <template v-if="currentUser">
             <NuxtLink
               :to="accountHref"
               :class="isHomePage ? 'home-nav-cta' : 'nav-pill'"
               @click="closeNav"
             >
-              Mon compte
+              {{ accountNavLabel }}
             </NuxtLink>
             <button
               type="button"
@@ -165,15 +205,18 @@ async function handleLogout() {
           </template>
         </div>
 
-        <!-- Mobile : mêmes pilules en ligne serrée, ou menu pour compte + déconnexion -->
-        <div class="flex items-center gap-2 sm:hidden">
+        <!-- Mobile : masqué sur dashboard beatmaker/ingé / admin -->
+        <div
+          v-if="!hideGlobalAccountNav"
+          class="flex items-center gap-2 sm:hidden"
+        >
           <template v-if="currentUser">
             <NuxtLink
               :to="accountHref"
               :class="isHomePage ? 'home-nav-cta !px-4 !py-2 !text-xs' : 'nav-pill !px-4 !py-2 !text-xs'"
               @click="closeNav"
             >
-              Mon compte
+              {{ accountNavLabel }}
             </NuxtLink>
             <button
               type="button"
@@ -235,14 +278,6 @@ async function handleLogout() {
           <p class="mb-2 truncate px-1 text-xs text-white/50" :title="userLabel ?? ''">
             {{ userLabel }}
           </p>
-          <NuxtLink
-            v-if="currentUser?.role === 'admin'"
-            to="/admin"
-            class="nav-link-mobile-dark mb-2 block"
-            @click="closeNav"
-          >
-            Admin
-          </NuxtLink>
           <button type="button" class="nav-link-mobile-dark block w-full text-left" @click="handleLogout">
             Déconnexion
           </button>
@@ -251,13 +286,13 @@ async function handleLogout() {
     </header>
 
     <main
-      class="w-full flex-1"
+      class="w-full min-w-0 flex-1"
       :class="
         isHomePage
           ? 'max-w-none bg-black p-0'
           : isAuthFullscreenPage
             ? 'max-w-none p-0'
-            : isBookerDashboard
+            : isBookerDashboard || isBeatmakerIngeDashboard || isAdminPage
               ? 'max-w-none bg-black p-0'
               : 'mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8'
       "
@@ -265,30 +300,54 @@ async function handleLogout() {
       <NuxtPage />
     </main>
 
-    <!-- Footer (masqué sur login / register) -->
+    <!-- Footer : style aligné header / dashboard (noir, Raleway, accent cyan) -->
     <footer
-      v-if="!isAuthFullscreenPage && !isHomePage && !isBookerDashboard"
-      class="mt-auto border-t border-[var(--pds-border)] bg-[var(--pds-card)]/60"
+      v-if="showFooter"
+      class="mt-auto border-t border-white/10 bg-black pb-[max(1.5rem,env(safe-area-inset-bottom))]"
     >
-      <div class="mx-auto max-w-4xl w-full px-4 py-8 sm:px-6">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
-          <div>
-            <p class="text-lg font-light tracking-[0.15em] text-white">PDS Studio</p>
-            <p class="text-sm text-[var(--pds-muted)] mt-1">
+      <div
+        class="h-px w-full bg-gradient-to-r from-transparent via-[#0073FF]/35 to-transparent"
+        aria-hidden="true"
+      />
+      <div class="mx-auto w-full max-w-[1440px] px-4 py-10 sm:px-8 md:px-[120px] md:py-12">
+        <div class="flex flex-col gap-10 md:flex-row md:items-start md:justify-between md:gap-16">
+          <div class="min-w-0 max-w-md">
+            <p class="font-['Raleway',sans-serif] text-xl font-medium tracking-tight text-white sm:text-2xl">
+              PDS Studio
+            </p>
+            <p
+              class="mt-3 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[14px] leading-relaxed text-white/55 sm:text-[15px]"
+            >
               Réservation de studio • Ingé son & beatmakers
             </p>
           </div>
-          <div class="footer-contact">
-            <p class="text-xs uppercase tracking-wider text-[var(--pds-muted)] mb-2">
-              Nous contacter
+          <div class="min-w-0 text-left md:text-right">
+            <p
+              class="font-['Raleway',sans-serif] text-[11px] font-medium uppercase tracking-[0.2em] text-white/40"
+            >
+              Contact
             </p>
-            <a href="mailto:contact@pds-studio.com" class="footer-link">contact@pds-studio.com</a>
-            <a href="tel:+33000000000" class="footer-link block mt-1">+33 (0)0 00 00 00 00</a>
-            <p class="text-sm text-[var(--pds-muted2)] mt-2">Adresse du studio • Ville</p>
+            <a
+              href="mailto:contact@pds-studio.com"
+              class="mt-4 block font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[15px] text-[#64E8FF] transition hover:text-white hover:underline"
+            >
+              contact@pds-studio.com
+            </a>
+            <a
+              href="tel:+33000000000"
+              class="mt-2 block font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[15px] text-white/75 transition hover:text-white"
+            >
+              +33 (0)0 00 00 00 00
+            </a>
+            <p
+              class="mt-4 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[13px] text-white/45"
+            >
+              13 rue de Vanves, 92100 Boulogne-Billancourt
+            </p>
           </div>
         </div>
         <p
-          class="text-center sm:text-right text-xs text-[var(--pds-muted2)] mt-6 pt-4 border-t border-[var(--pds-border)]"
+          class="mt-10 border-t border-white/10 pt-6 text-center font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[12px] text-white/35 md:text-right"
         >
           © {{ new Date().getFullYear() }} PDS Studio. Tous droits réservés.
         </p>
@@ -311,8 +370,5 @@ async function handleLogout() {
 /* Accueil Figma : CTAs nav — survol : main.css (--pds-hover-gradient) */
 .home-nav-cta {
   @apply inline-flex items-center justify-center rounded-full border border-white/50 bg-[#0e0e0e] px-5 py-1.5 text-center text-[13px] font-medium leading-6 text-white transition-[background,border-color,color] duration-200;
-}
-.footer-link {
-  @apply text-sm text-[var(--pds-primary)] hover:underline;
 }
 </style>

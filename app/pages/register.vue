@@ -69,7 +69,7 @@ const onSubmit = async () => {
     <div
       class="relative z-10 flex w-full flex-1 flex-col items-center justify-center px-6 py-12 sm:px-10 sm:py-16"
     >
-      <div class="w-full max-w-md">
+      <div class="w-full min-w-0 max-w-md">
         <h1
           class="mb-4 text-center text-3xl font-bold uppercase tracking-[0.14em] text-white sm:text-4xl"
         >

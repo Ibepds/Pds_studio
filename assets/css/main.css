@@ -2,11 +2,14 @@
 html {
   margin: 0;
   background-color: #000000;
+  overflow-x: clip;
 }
 
 #__nuxt {
   min-height: 100dvh;
+  min-width: 0;
   background-color: #000000;
+  overflow-x: clip;
 }
 
 :root {
@@ -35,6 +38,8 @@ body {
   color: var(--pds-text);
   min-height: 100vh;
   min-height: 100dvh;
+  min-width: 0;
+  overflow-x: clip;
 }
 
 /* Bouton principal */
@@ -224,11 +229,17 @@ button.btn-secondary.text-red-400:hover:not(:disabled) {
   .pds-h2 {
     font-size: 1.4rem;
   }
-  .btn-primary,
-  .btn-secondary {
+  /* Pleine largeur pour les CTA principaux ; les boutons secondaires inline (admin, listes) restent compacts */
+  .btn-primary {
     padding: 14px 24px;
     font-size: 0.95rem;
     width: 100%;
+    max-width: 100%;
+  }
+  .btn-secondary {
+    padding: 14px 24px;
+    font-size: 0.95rem;
+    max-width: 100%;
   }
   .pds-option {
     padding: 14px;
@@ -267,8 +278,13 @@ button.btn-secondary.text-red-400:hover:not(:disabled) {
   color: #fff;
 }
 
+/* Nav texte dashboard beatmaker / ingé — pas de soulignement */
+.pds-dashboard-subnav a {
+  text-decoration: none;
+}
+
 /* Autres <button> (onglets, calendrier…) — sans écraser .btn-primary / .btn-secondary / .pds-option */
-button:not(.btn-primary):not(.btn-secondary):not(.pds-option):hover:not(:disabled):not([class*='border-red']) {
+button:not(.btn-primary):not(.btn-secondary):not(.pds-option):not(.pds-sessions-ui):hover:not(:disabled):not([class*='border-red']) {
   background-image: var(--pds-hover-gradient);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.5);

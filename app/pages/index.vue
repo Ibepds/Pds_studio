@@ -1,21 +1,21 @@
 <template>
   <section
-    class="home-marketing relative min-h-[100dvh] w-full overflow-hidden bg-black font-[Raleway,sans-serif]"
+    class="home-marketing relative min-h-[100dvh] w-full min-w-0 overflow-x-clip bg-black font-[Raleway,sans-serif]"
   >
     <FigmaLandingBackground />
 
     <div
-      class="relative z-10 mx-auto flex min-h-[100dvh] max-w-[1440px] flex-col px-6 pb-0 pt-0 sm:px-[120px]"
+      class="relative z-10 mx-auto flex min-h-[100dvh] max-w-[1440px] flex-col px-4 pb-0 pt-0 sm:px-6 md:px-12 lg:px-[120px]"
     >
-      <!-- Espace nav Figma ~126px -->
-      <div class="h-[126px] shrink-0" aria-hidden="true" />
+      <!-- Espace sous la nav (réduit sur très petit écran) -->
+      <div class="h-20 shrink-0 sm:h-24 md:h-[126px]" aria-hidden="true" />
 
       <!-- Texte + CTA : gap 95px, zone ~560px -->
       <div
-        class="flex min-h-0 flex-1 flex-col items-center justify-center gap-12 pt-10 pb-0 lg:flex-row lg:items-center lg:justify-center lg:gap-[95px] lg:py-0 lg:min-h-[560px]"
+        class="flex min-h-0 w-full min-w-0 flex-1 flex-col items-center justify-center gap-12 pt-10 pb-0 lg:flex-row lg:items-center lg:justify-center lg:gap-[95px] lg:py-0 lg:min-h-[560px]"
       >
         <!-- Colonne texte -->
-        <div class="flex w-full max-w-[578px] flex-col gap-5">
+        <div class="flex w-full min-w-0 max-w-[578px] flex-col gap-5">
           <h1
             class="text-white [text-wrap:balance] font-normal uppercase tracking-[-0.02em] text-[clamp(1.75rem,6.5vw,4.375rem)] leading-[1.05] lg:text-[70px] lg:leading-[60px]"
           >
@@ -92,7 +92,7 @@
         </div>
 
         <!-- Colonne CTA -->
-        <div class="flex w-full max-w-[384px] flex-col gap-[15px]">
+        <div class="flex w-full min-w-0 max-w-[384px] shrink-0 flex-col gap-[15px]">
           <NuxtLink to="/reserver" class="home-hero-cta">
             Réserver en tant qu'invité
           </NuxtLink>

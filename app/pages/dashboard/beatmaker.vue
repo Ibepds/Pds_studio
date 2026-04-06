@@ -29,34 +29,49 @@ function isActive(to: string) {
 </script>
 
 <template>
-  <section class="space-y-6">
-    <header
-      class="flex flex-wrap items-center justify-between gap-4 border-b border-[var(--pds-border)] pb-4"
-    >
-      <div>
-        <h1 class="pds-h2 text-xl">Tableau de bord – Beatmaker</h1>
-        <p class="pds-subtitle mt-1">
-          {{ currentUser?.email }}
-        </p>
-      </div>
-      <button type="button" class="btn-secondary" @click="handleLogout">Déconnexion</button>
-    </header>
-
-    <nav class="flex flex-wrap gap-2 border-b border-[var(--pds-border)] pb-4">
-      <NuxtLink
-        v-for="link in navLinks"
-        :key="link.to"
-        :to="link.to"
-        class="rounded-lg px-3 py-2 text-sm font-medium transition-colors"
-        :class="
-          isActive(link.to)
-            ? 'bg-[var(--pds-primary)]/20 text-[var(--pds-primary)]'
-            : 'text-[var(--pds-muted)] hover:text-[var(--pds-text)] hover:bg-[var(--pds-border)]/50'
-        "
+  <section class="min-w-0 overflow-x-clip bg-black text-white">
+    <header class="border-b border-white/10">
+      <div
+        class="mx-auto flex w-full min-w-0 max-w-[1440px] flex-wrap items-center justify-end gap-x-6 gap-y-3 px-4 py-4 sm:gap-x-8 sm:px-8 md:gap-x-10 md:px-[120px] md:py-5"
       >
-        {{ link.label }}
-      </NuxtLink>
-    </nav>
+        <nav
+          class="pds-dashboard-subnav flex min-w-0 max-w-full flex-wrap items-center justify-end gap-x-8 font-['Raleway',sans-serif] text-[15px] font-medium leading-tight sm:gap-x-10 sm:text-base"
+          aria-label="Sections du tableau de bord"
+        >
+          <NuxtLink
+            v-for="link in navLinks"
+            :key="link.to"
+            :to="link.to"
+            class="border-b-2 pb-1.5 transition-colors duration-200"
+            :class="
+              isActive(link.to)
+                ? 'border-[#4a9eff] text-[#4a9eff]'
+                : 'border-transparent text-white/[0.88] hover:text-white'
+            "
+          >
+            {{ link.label }}
+          </NuxtLink>
+        </nav>
+
+        <span
+          class="hidden h-4 w-px bg-white/15 sm:block"
+          aria-hidden="true"
+        />
+
+        <span
+          class="min-w-0 max-w-[min(100%,200px)] truncate text-xs text-white/65 sm:max-w-[280px] sm:text-sm"
+          :title="currentUser?.email ?? ''"
+          >{{ currentUser?.email }}</span
+        >
+        <button
+          type="button"
+          class="pds-sessions-ui shrink-0 text-sm text-white/85 transition hover:text-white"
+          @click="handleLogout"
+        >
+          Déconnexion
+        </button>
+      </div>
+    </header>
 
     <NuxtPage />
   </section>

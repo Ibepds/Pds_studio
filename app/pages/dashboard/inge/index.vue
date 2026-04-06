@@ -3,7 +3,7 @@ import { navigateTo } from '#imports'
 
 // Rediriger vers la première feature par défaut
 onMounted(() => {
-  navigateTo('/dashboard/inge/sessions-a-confirmer', { replace: true })
+  navigateTo('/dashboard/inge/sessions', { replace: true })
 })
 </script>
 

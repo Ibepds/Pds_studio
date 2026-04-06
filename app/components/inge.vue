@@ -230,10 +230,10 @@ const handleFilesChange = async (e: Event) => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="min-w-0 space-y-6 overflow-x-clip">
     <h2 class="pds-h2">Espace ingé son – sessions & pistes</h2>
 
-    <div class="pds-card space-y-3">
+    <div class="pds-card min-w-0 space-y-3">
       <h3 class="pds-subtitle">Sessions à confirmer (tes dispos correspondent)</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Ces réservations correspondent à tes créneaux. Confirme pour les valider.
@@ -268,12 +268,12 @@ const handleFilesChange = async (e: Event) => {
       </div>
     </div>
 
-    <div class="pds-card space-y-3">
+    <div class="pds-card min-w-0 space-y-3">
       <h3 class="pds-subtitle">Calendrier semaine</h3>
       <WeekCalendar :sessions="myUpcomingSessions" />
     </div>
 
-    <div class="pds-card space-y-3">
+    <div class="pds-card min-w-0 space-y-3">
       <h3 class="pds-subtitle">Sessions à venir</h3>
       <div v-if="sessionsLoading" class="text-sm text-[var(--pds-muted)]">
         Chargement des sessions...
@@ -318,7 +318,7 @@ const handleFilesChange = async (e: Event) => {
     </div>
 
     <!-- Mes disponibilités -->
-    <div class="pds-card space-y-4">
+    <div class="pds-card min-w-0 space-y-4">
       <h3 class="pds-subtitle">Mes disponibilités</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Choisis une date puis ajoute des créneaux (ex. 10h–14h). Les bookers ne verront que les
@@ -408,7 +408,7 @@ const handleFilesChange = async (e: Event) => {
       </div>
     </div>
 
-    <div v-if="selectedSessionId" class="pds-card space-y-3">
+    <div v-if="selectedSessionId" class="pds-card min-w-0 space-y-3">
       <h3 class="pds-subtitle">Pistes de la session</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Session sélectionnée:

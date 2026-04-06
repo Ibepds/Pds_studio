@@ -14,6 +14,8 @@ onMounted(() => {
     navigateTo('/dashboard/inge', { replace: true })
   } else if (roleParam.value === 'beatmaker') {
     navigateTo('/dashboard/beatmaker', { replace: true })
+  } else if (roleParam.value === 'admin') {
+    navigateTo('/admin/indicateurs', { replace: true })
   } else {
     navigateTo('/', { replace: true })
   }

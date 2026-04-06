@@ -631,7 +631,7 @@ function restToPayForSession(s: any): number {
 </script>
 
 <template>
-  <div class="space-y-8">
+  <div class="min-w-0 space-y-8 overflow-x-clip">
     <!-- Écrans succès / échec (6 secondes) -->
     <div
       v-if="paymentResult"
@@ -663,7 +663,7 @@ function restToPayForSession(s: any): number {
         </div>
 
         <h2
-          class="font-[Raleway,sans-serif] text-[42px] font-extrabold uppercase tracking-wide text-white sm:text-[50px]"
+          class="font-[Raleway,sans-serif] text-[clamp(1.15rem,4.5vw,3.125rem)] font-extrabold uppercase leading-tight tracking-wide text-white [text-wrap:balance] sm:leading-none"
         >
           {{ paymentResult === 'success' ? 'PAIEMENT RÉALISÉ AVEC SUCCÈS' : 'ÉCHEC DU PAIEMENT' }}
         </h2>
@@ -860,7 +860,7 @@ function restToPayForSession(s: any): number {
           <div class="absolute inset-0 pointer-events-none z-0">
             <FigmaLandingBackground variant="slot" />
             <h2
-              class="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 font-[Raleway,sans-serif] text-[42px] font-extrabold uppercase tracking-wide text-white sm:text-[50px]"
+              class="absolute left-1/2 top-1/2 w-[min(100%,26rem)] -translate-x-1/2 -translate-y-1/2 px-4 text-center font-[Raleway,sans-serif] text-[clamp(1.25rem,5vw,3.125rem)] font-extrabold uppercase leading-tight tracking-wide text-white [text-wrap:balance]"
             >
               PAIEMENT EN COURS...
             </h2>

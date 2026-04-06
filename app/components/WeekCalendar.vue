@@ -151,7 +151,9 @@ function goToToday() {
         >
           ‹
         </button>
-        <span class="min-w-[140px] text-center font-medium text-[var(--pds-text)]">
+        <span
+          class="min-w-0 shrink text-center text-sm font-medium text-[var(--pds-text)] sm:min-w-[120px] sm:text-base md:min-w-[140px]"
+        >
           {{ weekLabel }}
         </span>
         <button
@@ -178,15 +180,11 @@ function goToToday() {
         class="week-calendar-inner"
         :style="{
           '--week-total-hours': totalHours,
-          '--week-row-height': '48px',
-          '--week-header-height': '32px',
-          '--week-time-width': '56px',
           display: 'grid',
           gridTemplateColumns: 'var(--week-time-width) repeat(7, minmax(0, 1fr))',
           gridTemplateRows:
             'var(--week-header-height) repeat(var(--week-total-hours), var(--week-row-height))',
           gridGap: '1px',
-          minWidth: 'min(100%, 720px)',
         }"
       >
         <!-- Corner -->
@@ -249,6 +247,24 @@ function goToToday() {
 .week-calendar-inner {
   /* Traits de séparation = gap de la grille (1px), couleur = fond du conteneur */
   background: var(--pds-border);
+  --week-row-height: 48px;
+  --week-header-height: 32px;
+  --week-time-width: 56px;
+  min-width: min(100%, 720px);
+}
+
+@media (max-width: 639px) {
+  .week-calendar-inner {
+    --week-row-height: 36px;
+    --week-header-height: 28px;
+    --week-time-width: 44px;
+    min-width: 560px;
+  }
+  .week-calendar-session {
+    font-size: 9px;
+    padding-left: 0.25rem;
+    padding-right: 0.25rem;
+  }
 }
 .week-cell-header {
   min-width: 0;

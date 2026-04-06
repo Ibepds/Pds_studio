@@ -20,8 +20,10 @@ function isActive(to: string) {
 </script>
 
 <template>
-  <section class="booker-dashboard font-[Raleway,sans-serif] text-white">
-    <div class="mx-auto w-full max-w-[1440px] px-6 pb-10 pt-4 sm:px-[120px] sm:pb-12 sm:pt-6">
+  <section class="booker-dashboard min-w-0 overflow-x-clip font-[Raleway,sans-serif] text-white">
+    <div
+      class="mx-auto w-full min-w-0 max-w-[1440px] px-4 pb-10 pt-4 sm:px-6 sm:pb-12 sm:pt-6 md:px-12 lg:px-[120px]"
+    >
       <nav class="flex flex-wrap gap-2 border-b border-white/10 pb-5 sm:gap-3">
         <NuxtLink
           v-for="link in navLinks"

@@ -157,7 +157,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
 </script>
 
 <template>
-  <div class="reserver-page">
+  <div class="reserver-page min-w-0">
     <!-- Écrans succès / échec (6 secondes) -->
     <div
       v-if="paymentResult"
@@ -170,7 +170,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
         <FigmaLandingBackground variant="slot" />
       </div>
 
-      <div class="relative z-10 flex w-full flex-col items-center gap-6 px-6 text-center">
+      <div class="relative z-10 flex w-full min-w-0 flex-col items-center gap-6 px-6 text-center">
         <div
           v-if="paymentResult === 'success'"
           class="mt-2 inline-flex h-[60px] w-[60px] items-center justify-center rounded-full border border-emerald-400/50 bg-emerald-400/10 text-emerald-300"
@@ -189,7 +189,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
         </div>
 
         <h2
-          class="font-[Raleway,sans-serif] text-[42px] font-extrabold uppercase tracking-wide text-white sm:text-[50px]"
+          class="font-[Raleway,sans-serif] text-[clamp(1.15rem,4.5vw,3.125rem)] font-extrabold uppercase leading-tight tracking-wide text-white [text-wrap:balance] sm:leading-none"
         >
           {{ paymentResult === 'success' ? 'PAIEMENT RÉALISÉ AVEC SUCCÈS' : 'ÉCHEC DU PAIEMENT' }}
         </h2>
@@ -246,8 +246,22 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
     <!-- Tab réservation -->
     <template v-if="activeTab === 'reserver'">
       <div v-if="!bookingKind" class="relative">
+        <!-- Mobile : accès paiement invité en haut (sous la navbar) -->
+        <div
+          class="sticky top-[3.25rem] z-30 border-b border-white/10 bg-black/90 px-4 py-3 text-center backdrop-blur-md sm:top-[4.25rem] md:hidden"
+        >
+          <button
+            type="button"
+            class="text-sm font-medium text-white/80 transition-colors hover:text-white"
+            @click="activeTab = 'payer'"
+          >
+            Payer un acompte sans compte →
+          </button>
+        </div>
         <BookingKindLanding variant="buttons" @choose="onKindContinue" />
-        <p class="pointer-events-auto absolute bottom-6 left-0 right-0 z-20 text-center sm:bottom-10">
+        <p
+          class="pointer-events-auto absolute bottom-6 left-0 right-0 z-20 hidden text-center md:block sm:bottom-10"
+        >
           <button
             type="button"
             class="text-sm text-white/70 transition-colors hover:text-white"

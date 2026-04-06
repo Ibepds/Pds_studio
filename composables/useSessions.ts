@@ -312,12 +312,76 @@ export const useSessions = () => {
     }
   }
 
+  /** Toutes les sessions assignées à l’ingé connecté (passées et à venir). */
+  const listForCurrentInge = async () => {
+    const db = getDb()
+    const user = currentUser.value as AppUser | null
+    if (!db || !user) return
+
+    loading.value = true
+    error.value = null
+
+    try {
+      const col = collection(db, 'sessions')
+      const qSessions = query(
+        col,
+        where('ingeId', '==', user.uid),
+        orderBy('date', 'asc'),
+        orderBy('startTime', 'asc'),
+      )
+      const snap = await getDocs(qSessions)
+
+      const data: Session[] = []
+      snap.forEach((d) => {
+        data.push(
+          parseSessionDoc(d.id, {
+            ...d.data(),
+            status: (d.data() as any).status ?? 'pending',
+          } as Record<string, unknown>),
+        )
+      })
+
+      sessions.value = data
+    } catch (e: any) {
+      error.value = e?.message ?? 'Erreur lors du chargement des sessions ingé'
+    } finally {
+      loading.value = false
+    }
+  }
+
   /** Toutes les sessions à partir d’une date (pour admin) */
   const listAllFromDate = async (fromDate: string): Promise<Session[]> => {
     const db = getDb()
     if (!db) return []
     const col = collection(db, 'sessions')
     const q = query(col, where('date', '>=', fromDate))
+    const snap = await getDocs(q)
+    const data: Session[] = []
+    snap.forEach((d) => {
+      data.push(
+        parseSessionDoc(d.id, {
+          ...d.data(),
+          status: (d.data() as any).status ?? 'pending',
+        } as Record<string, unknown>),
+      )
+    })
+    data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
+    return data
+  }
+
+  /** Sessions dont la date est dans [startDate, endDate] (YYYY-MM-DD), pour stats admin par mois. */
+  const listSessionsInDateRange = async (
+    startDate: string,
+    endDate: string,
+  ): Promise<Session[]> => {
+    const db = getDb()
+    if (!db) return []
+    const col = collection(db, 'sessions')
+    const q = query(
+      col,
+      where('date', '>=', startDate),
+      where('date', '<=', endDate),
+    )
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
@@ -369,7 +433,10 @@ export const useSessions = () => {
       ...(ingeId ? { ingeId } : {}),
     })
 
-    await listForCurrentBooker()
+    const user = currentUser.value as AppUser | null
+    if (user?.role === 'booker') {
+      await listForCurrentBooker()
+    }
   }
 
   /** Marque qu'un récap a été envoyé par mail (appelé après envoi du mail de récap). L'appelant doit rafraîchir sa liste (listForCurrentBooker / listAllFromDate). */
@@ -398,10 +465,12 @@ export const useSessions = () => {
     listForCurrentBooker,
     listAllUpcoming,
     listForCurrentBeatmaker,
+    listForCurrentInge,
     listSessionsForDate,
     findUnpaidByReservationName,
     listAllPending,
     listAllFromDate,
+    listSessionsInDateRange,
     bookSession,
     updateSessionStatus,
     updateSessionRecapSent,

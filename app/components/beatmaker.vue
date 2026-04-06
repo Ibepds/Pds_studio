@@ -199,10 +199,10 @@ const handleDeleteBeat = async (beatId: string) => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="min-w-0 space-y-6 overflow-x-clip">
     <h2 v-if="mode === 'all'" class="pds-h2">Espace beatmaker – prods & sessions</h2>
 
-    <div v-if="showCalendrier" class="pds-card space-y-3">
+    <div v-if="showCalendrier" class="pds-card min-w-0 space-y-3">
       <h3 class="pds-subtitle">Calendrier semaine</h3>
       <WeekCalendar :sessions="sessions" />
     </div>
@@ -235,7 +235,7 @@ const handleDeleteBeat = async (beatId: string) => {
     </div>
 
     <!-- Mes disponibilités -->
-    <div v-if="showDisponibilites" class="pds-card space-y-4">
+    <div v-if="showDisponibilites" class="pds-card min-w-0 space-y-4">
       <h3 class="pds-subtitle">Mes disponibilités</h3>
       <p class="text-sm text-[var(--pds-muted)]">
         Choisis une date puis ajoute des créneaux. Les bookers ne verront que les dates où tu es
@@ -423,9 +423,9 @@ const handleDeleteBeat = async (beatId: string) => {
             <div
               v-for="b in myBeats"
               :key="b.id"
-              class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
+              class="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div class="space-y-0.5">
+              <div class="min-w-0 space-y-0.5">
                 <p class="text-[11px] font-medium text-slate-100">
                   {{ b.title }}
                   <span
@@ -442,7 +442,7 @@ const handleDeleteBeat = async (beatId: string) => {
                 :href="b.url"
                 target="_blank"
                 rel="noreferrer"
-                class="text-[10px] text-sky-400 hover:text-sky-300"
+                class="shrink-0 text-[10px] text-sky-400 hover:text-sky-300"
               >
                 Écouter / télécharger
               </a>
@@ -466,9 +466,9 @@ const handleDeleteBeat = async (beatId: string) => {
             <div
               v-for="b in myBeats"
               :key="b.id"
-              class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
+              class="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
             >
-              <div class="space-y-0.5">
+              <div class="min-w-0 space-y-0.5">
                 <p class="text-[11px] font-medium text-slate-100">
                   {{ b.title }}
                   <span
@@ -483,7 +483,7 @@ const handleDeleteBeat = async (beatId: string) => {
               </div>
               <button
                 type="button"
-                class="rounded-lg border border-red-500/50 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50"
+                class="shrink-0 rounded-lg border border-red-500/50 px-2 py-1 text-[10px] font-medium text-red-300 hover:bg-red-500/10 disabled:opacity-50"
                 :disabled="deletingBeatId === b.id"
                 @click="handleDeleteBeat(b.id)"
               >
@@ -512,9 +512,9 @@ const handleDeleteBeat = async (beatId: string) => {
         <div
           v-for="s in sessions"
           :key="s.id"
-          class="flex items-center justify-between rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2"
+          class="flex flex-col gap-2 rounded-lg border border-slate-800 bg-slate-950/60 px-3 py-2 sm:flex-row sm:items-center sm:justify-between"
         >
-          <div class="space-y-0.5">
+          <div class="min-w-0 space-y-0.5">
             <p class="text-[11px] font-medium text-slate-100">
               {{ s.date }} • {{ s.startTime }} – {{ s.endTime }}
             </p>
@@ -523,7 +523,7 @@ const handleDeleteBeat = async (beatId: string) => {
             </p>
           </div>
           <span
-            class="rounded-full px-2 py-0.5 text-[10px]"
+            class="shrink-0 self-start rounded-full px-2 py-0.5 text-[10px] sm:self-center"
             :class="{
               'bg-amber-500/20 text-amber-300': s.status === 'pending',
               'bg-emerald-500/20 text-emerald-300': s.status === 'confirmed',
