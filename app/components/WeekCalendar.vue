@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { SLOT_START_HOUR, SLOT_END_HOUR } from '../../utils/pricing'
+
+/** Affichage calendrier : minuit en haut, 23h en bas */
+const CALENDAR_START_HOUR = 0
+const CALENDAR_END_HOUR = 23
 
 export interface WeekCalendarSession {
   id: string
@@ -20,8 +23,8 @@ const props = defineProps<{
   endHour?: number
 }>()
 
-const startHour = computed(() => props.startHour ?? SLOT_START_HOUR)
-const endHour = computed(() => props.endHour ?? SLOT_END_HOUR)
+const startHour = computed(() => props.startHour ?? CALENDAR_START_HOUR)
+const endHour = computed(() => props.endHour ?? CALENDAR_END_HOUR)
 const totalHours = computed(() => endHour.value - startHour.value + 1)
 
 const weekStart = ref(getMonday(new Date()))
@@ -104,18 +107,22 @@ function timeToDecimal(t: string): number {
   return h + m / 60
 }
 
-/** Grille: row 1 = header, rows 2..1+totalHours = heures. Col 1 = time, cols 2..8 = jours. */
+function formatHourLabel(h: number): string {
+  return `${String(h).padStart(2, '0')}:00`
+}
+
+/** Grille: rows 1..totalHours = heures (0h en haut). Col 1 = time, cols 2..8 = jours. Dernière ligne = libellés jour. */
 function sessionGridPlace(session: WeekCalendarSession): {
   gridColumn: number
   gridRowStart: number
   gridRowEnd: number
 } {
   const dayIndex = weekDateStrs.value.indexOf(session.date)
-  if (dayIndex < 0) return { gridColumn: 2, gridRowStart: 2, gridRowEnd: 2 }
+  if (dayIndex < 0) return { gridColumn: 2, gridRowStart: 1, gridRowEnd: 2 }
   const startDec = timeToDecimal(session.startTime)
   const endDec = timeToDecimal(session.endTime)
-  const rowStart = 2 + Math.max(0, Math.floor(startDec - startHour.value))
-  const rowEnd = 2 + Math.min(totalHours.value, Math.ceil(endDec - startHour.value))
+  const rowStart = 1 + Math.max(0, Math.floor(startDec - startHour.value))
+  const rowEnd = 1 + Math.min(totalHours.value, Math.ceil(endDec - startHour.value))
   return {
     gridColumn: dayIndex + 2,
     gridRowStart: rowStart,
@@ -182,42 +189,46 @@ function goToToday() {
           '--week-total-hours': totalHours,
           display: 'grid',
           gridTemplateColumns: 'var(--week-time-width) repeat(7, minmax(0, 1fr))',
-          gridTemplateRows:
-            'var(--week-header-height) repeat(var(--week-total-hours), var(--week-row-height))',
+          gridTemplateRows: `repeat(var(--week-total-hours), var(--week-row-height)) var(--week-day-label-height)`,
           gridGap: '1px',
         }"
       >
-        <!-- Corner -->
-        <div class="week-cell-header bg-[var(--pds-bg)]" style="grid-column: 1; grid-row: 1" />
-        <!-- Day headers (cols 2-8) -->
-        <div
-          v-for="(day, i) in weekDays"
-          :key="day.dateStr"
-          class="week-cell-header bg-[var(--pds-bg)] py-1.5 text-center text-xs font-medium text-[var(--pds-muted)]"
-          :style="{ gridColumn: i + 2, gridRow: 1 }"
-        >
-          {{ day.label }}
-        </div>
-        <!-- Time + cells -->
+        <!-- Heures + cellules (00:00 en haut → 23:00 en bas) -->
         <template v-for="(h, hi) in hourLabels" :key="h">
           <div
             class="bg-[var(--pds-bg)] pr-1 pt-0.5 text-right text-xs text-[var(--pds-muted)]"
-            :style="{ gridColumn: 1, gridRow: hi + 2 }"
+            :style="{ gridColumn: 1, gridRow: hi + 1 }"
           >
-            {{ h }}h
+            {{ formatHourLabel(h) }}
           </div>
           <div
             v-for="(day, di) in weekDays"
             :key="`${day.dateStr}-${h}`"
-            class="bg-[var(--pds-card)]"
-            :style="{ gridColumn: di + 2, gridRow: hi + 2 }"
+            class="bg-[var(--pds-card)] min-w-0"
+            :style="{ gridColumn: di + 2, gridRow: hi + 1 }"
           />
         </template>
+
+        <!-- Libellés jour sous chaque colonne -->
+        <div
+          class="bg-[var(--pds-bg)]"
+          :style="{ gridColumn: 1, gridRow: totalHours + 1 }"
+          aria-hidden="true"
+        />
+        <div
+          v-for="(day, i) in weekDays"
+          :key="'label-' + day.dateStr"
+          class="week-cell-day-label bg-[var(--pds-bg)] py-1.5 text-center text-xs font-medium text-[var(--pds-muted)]"
+          :style="{ gridColumn: i + 2, gridRow: totalHours + 1 }"
+        >
+          {{ day.label }}
+        </div>
+
         <!-- Session blocks (same grid) -->
         <div
           v-for="s in sessionsInWeek"
           :key="s.id"
-          class="week-calendar-session mx-0.5 my-0.5 overflow-hidden rounded border-l-4 py-1 px-1.5 text-[10px] cursor-pointer min-h-[28px] flex flex-col justify-center"
+          class="week-calendar-session mx-0.5 my-0.5 overflow-hidden rounded border-l-4 py-1 px-1.5 text-[10px] cursor-pointer min-h-[28px] flex flex-col justify-center min-w-0"
           :class="{
             'border-amber-500 bg-amber-500/25 text-amber-100': s.status === 'pending',
             'border-emerald-500 bg-emerald-500/25 text-emerald-100': s.status === 'confirmed',
@@ -245,18 +256,17 @@ function goToToday() {
   min-height: 200px;
 }
 .week-calendar-inner {
-  /* Traits de séparation = gap de la grille (1px), couleur = fond du conteneur */
   background: var(--pds-border);
-  --week-row-height: 48px;
-  --week-header-height: 32px;
+  --week-row-height: 28px;
+  --week-day-label-height: 32px;
   --week-time-width: 56px;
   min-width: min(100%, 720px);
 }
 
 @media (max-width: 639px) {
   .week-calendar-inner {
-    --week-row-height: 36px;
-    --week-header-height: 28px;
+    --week-row-height: 22px;
+    --week-day-label-height: 28px;
     --week-time-width: 44px;
     min-width: 560px;
   }
@@ -266,7 +276,7 @@ function goToToday() {
     padding-right: 0.25rem;
   }
 }
-.week-cell-header {
+.week-cell-day-label {
   min-width: 0;
 }
 .week-calendar-session:hover {

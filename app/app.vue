@@ -8,12 +8,18 @@ const { currentUser, logout } = useAuth()
 /** Login + register : fond noir pleine largeur */
 const isAuthFullscreenPage = computed(
   () =>
-    route.path === '/login' || route.path === '/register' || route.path === '/reserver',
+    route.path === '/login' ||
+    route.path === '/register' ||
+    route.path.startsWith('/register/') ||
+    route.path === '/reserver',
 )
 
 /** Footer partout sauf formulaires auth plein écran */
 const showFooter = computed(
-  () => route.path !== '/login' && route.path !== '/register',
+  () =>
+    route.path !== '/login' &&
+    route.path !== '/register' &&
+    !route.path.startsWith('/register/'),
 )
 
 const isHomePage = computed(() => route.path === '/')
@@ -328,22 +334,17 @@ async function handleLogout() {
               Contact
             </p>
             <a
-              href="mailto:contact@pds-studio.com"
+              href="mailto:studio@pdsrecords.com"
               class="mt-4 block font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[15px] text-[#64E8FF] transition hover:text-white hover:underline"
             >
-              contact@pds-studio.com
+              studio@pdsrecords.com
             </a>
             <a
-              href="tel:+33000000000"
+              href="tel:+33763917679"
               class="mt-2 block font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[15px] text-white/75 transition hover:text-white"
             >
-              +33 (0)0 00 00 00 00
+              07 63 91 76 79
             </a>
-            <p
-              class="mt-4 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[13px] text-white/45"
-            >
-              13 rue de Vanves, 92100 Boulogne-Billancourt
-            </p>
           </div>
         </div>
         <p

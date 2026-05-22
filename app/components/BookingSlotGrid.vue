@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 
-/** Lignes du haut (23:00) vers le bas (00:00), comme la maquette Figma */
-const HOURS_DESC = Array.from({ length: 24 }, (_, i) => 23 - i)
+/** Minuit (00:00) en haut → 23:00 en bas */
+const HOURS_ASC = Array.from({ length: 24 }, (_, i) => i)
 
 const props = withDefaults(
   defineProps<{
@@ -122,6 +122,10 @@ function hourLabelClass(h: number): string {
     h < props.modelStartHour + props.durationHours
   return sel ? 'booking-slot-grid__hour booking-slot-grid__hour--active' : 'booking-slot-grid__hour'
 }
+
+function formatHourLabel(h: number): string {
+  return `${String(h).padStart(2, '0')}:00`
+}
 </script>
 
 <template>
@@ -131,149 +135,149 @@ function hourLabelClass(h: number): string {
       :class="{ 'pointer-events-none': locked }"
       :aria-disabled="locked"
     >
-      <div
-        class="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
-      >
-        <h3
-          class="font-[Raleway,sans-serif] text-xl font-bold leading-none text-white sm:text-2xl md:text-[30px]"
+        <div
+          class="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between sm:gap-6"
         >
-          Sélectionner votre créneau
-        </h3>
-        <div class="flex flex-wrap items-center gap-5 text-[15px] text-white">
-          <span class="inline-flex items-center gap-1.5">
-            <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#0073FF]" aria-hidden="true" />
-            <span class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal">Votre sélection</span>
-          </span>
-          <span class="inline-flex items-center gap-1.5">
-            <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#3D3D3D]" aria-hidden="true" />
-            <span class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal">Occupé</span>
-          </span>
-        </div>
-      </div>
-
-      <div v-if="loading" class="absolute inset-0 z-10 flex items-center justify-center bg-black/40">
-        <span class="text-sm text-white/80">Chargement des créneaux…</span>
-      </div>
-
-      <div class="booking-slot-grid__scroll min-w-0 overflow-x-auto">
-        <!-- Augmenter la largeur max pour que le calendrier soit plus "grand" sur desktop -->
-        <div class="booking-slot-grid__inner inline-flex min-w-[min(100%,1200px)] gap-2 sm:gap-3">
-          <!-- Heures gauche -->
-          <div
-            class="booking-slot-grid__axis flex w-9 shrink-0 flex-col gap-1 py-0 sm:w-[37px]"
-            aria-hidden="true"
+          <h3
+            class="font-[Raleway,sans-serif] text-xl font-bold leading-none text-white sm:text-2xl md:text-[30px]"
           >
-            <div
-              v-for="h in HOURS_DESC"
-              :key="'L' + h"
-              :class="hourLabelClass(h)"
-            >
-              {{ String(h).padStart(2, '0') }}:00
-            </div>
+            Sélectionner votre créneau
+          </h3>
+          <div class="flex flex-wrap items-center gap-5 text-[15px] text-white">
+            <span class="inline-flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#0073FF]" aria-hidden="true" />
+              <span class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal"
+                >Votre sélection</span
+              >
+            </span>
+            <span class="inline-flex items-center gap-1.5">
+              <span class="h-2.5 w-2.5 shrink-0 rounded-full bg-[#3D3D3D]" aria-hidden="true" />
+              <span class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] font-normal"
+                >Occupé</span
+              >
+            </span>
           </div>
+        </div>
 
-          <!-- Colonnes jour -->
-          <div class="flex min-w-0 flex-1 gap-1 sm:gap-1">
-            <div
-              v-for="col in weekDates"
-              :key="col.dateStr"
-              class="flex min-w-[72px] flex-1 flex-col gap-1 sm:min-w-[100px]"
-            >
+        <div
+          v-if="loading"
+          class="absolute inset-0 z-10 flex items-center justify-center bg-black/40"
+        >
+          <span class="text-sm text-white/80">Chargement des créneaux…</span>
+        </div>
+
+        <div class="booking-slot-grid__scroll min-w-0 overflow-x-auto">
+          <div
+            class="booking-slot-grid__matrix"
+            :style="{
+              display: 'grid',
+              gridTemplateColumns:
+                'var(--bsg-time-width) repeat(7, minmax(var(--bsg-col-min), 1fr)) var(--bsg-time-width)',
+              gridTemplateRows: `repeat(24, var(--bsg-row-height)) var(--bsg-day-label-height)`,
+              gap: 'var(--bsg-gap)',
+            }"
+          >
+            <template v-for="(h, hi) in HOURS_ASC" :key="h">
+              <div
+                :class="hourLabelClass(h)"
+                :style="{ gridColumn: 1, gridRow: hi + 1 }"
+              >
+                {{ formatHourLabel(h) }}
+              </div>
+
               <button
-                v-for="h in HOURS_DESC"
+                v-for="(col, di) in weekDates"
                 :key="col.dateStr + '-' + h"
                 type="button"
                 :disabled="locked || loading || !canPick(col.dateStr, h)"
                 :class="cellClass(col.dateStr, h)"
-                :aria-label="`Créneau ${col.label} ${String(h).padStart(2, '0')}:00`"
+                :style="{ gridColumn: di + 2, gridRow: hi + 1 }"
+                :aria-label="`Créneau ${col.label} ${formatHourLabel(h)}`"
                 @click="onCellClick(col.dateStr, h)"
               />
-            </div>
-          </div>
 
-          <!-- Heures droite -->
-          <div
-            class="booking-slot-grid__axis flex w-9 shrink-0 flex-col gap-1 py-0 sm:w-[37px]"
-            aria-hidden="true"
-          >
+              <div
+                :class="hourLabelClass(h)"
+                :style="{ gridColumn: 9, gridRow: hi + 1 }"
+              >
+                {{ formatHourLabel(h) }}
+              </div>
+            </template>
+
+            <div :style="{ gridColumn: 1, gridRow: 25 }" aria-hidden="true" />
+
             <div
-              v-for="h in HOURS_DESC"
-              :key="'R' + h"
-              :class="hourLabelClass(h)"
+              v-for="(col, di) in weekDates"
+              :key="'day-' + col.dateStr"
+              class="booking-slot-grid__day-label"
+              :style="{ gridColumn: di + 2, gridRow: 25 }"
             >
-              {{ String(h).padStart(2, '0') }}:00
+              <span class="hidden sm:inline">{{ col.label }}</span>
+              <span class="sm:hidden">{{ col.shortLabel }}</span>
             </div>
+
+            <div :style="{ gridColumn: 9, gridRow: 25 }" aria-hidden="true" />
           </div>
         </div>
-      </div>
 
-      <!-- Jours sous la grille -->
-      <div
-        class="mt-4 flex items-center justify-center gap-2 px-0 text-center sm:mt-5 sm:gap-4 md:gap-9"
-      >
-        <button
-          type="button"
-          class="rounded px-1 text-xl leading-none transition"
-          :class="
-            locked
-              ? 'cursor-not-allowed text-white/30'
-              : 'text-white/80 hover:text-white'
-          "
-          aria-label="Semaine précédente"
-          :disabled="locked"
-          @click="emit('prev-week')"
-        >
-          ‹
-        </button>
-        <div
-          class="flex max-w-[calc(100%-4rem)] flex-1 flex-wrap justify-center gap-x-2 gap-y-1 sm:gap-x-4 md:gap-x-6"
-        >
-          <span
-            v-for="col in weekDates"
-            :key="'d' + col.dateStr"
-            class="inline-block min-w-0 text-center font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-[10px] font-light leading-tight text-[#818181] sm:text-xs"
+        <div class="mt-4 flex items-center justify-center gap-4 sm:mt-5">
+          <button
+            type="button"
+            class="rounded px-2 text-xl leading-none transition"
+            :class="
+              locked ? 'cursor-not-allowed text-white/30' : 'text-white/80 hover:text-white'
+            "
+            aria-label="Semaine précédente"
+            :disabled="locked"
+            @click="emit('prev-week')"
           >
-            <span class="hidden sm:inline">{{ col.label }}</span>
-            <span class="sm:hidden">{{ col.shortLabel }}</span>
-          </span>
+            ‹
+          </button>
+          <button
+            type="button"
+            class="rounded px-2 text-xl leading-none transition"
+            :class="
+              locked ? 'cursor-not-allowed text-white/30' : 'text-white/80 hover:text-white'
+            "
+            aria-label="Semaine suivante"
+            :disabled="locked"
+            @click="emit('next-week')"
+          >
+            ›
+          </button>
         </div>
-        <button
-          type="button"
-          class="rounded px-1 text-xl leading-none transition"
-          :class="
-            locked
-              ? 'cursor-not-allowed text-white/30'
-              : 'text-white/80 hover:text-white'
-          "
-          aria-label="Semaine suivante"
-          :disabled="locked"
-          @click="emit('next-week')"
-        >
-          ›
-        </button>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
-.booking-slot-grid__axis {
-  padding-top: 0;
-  padding-bottom: 0;
+.booking-slot-grid__matrix {
+  --bsg-row-height: 18px;
+  --bsg-day-label-height: auto;
+  --bsg-gap: 4px;
+  --bsg-time-width: 37px;
+  --bsg-col-min: 72px;
+  min-width: min(100%, 1200px);
+}
+
+@media (min-width: 640px) {
+  .booking-slot-grid__matrix {
+    --bsg-col-min: 100px;
+  }
 }
 
 .booking-slot-grid__hour {
-  height: 18px;
+  height: var(--bsg-row-height);
   font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
   font-size: 12px;
   font-weight: 300;
-  line-height: 18px;
+  line-height: var(--bsg-row-height);
   text-align: center;
   color: #818181;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  min-width: 0;
 }
 
 .booking-slot-grid__hour--active {
@@ -281,13 +285,30 @@ function hourLabelClass(h: number): string {
   color: #ffffff;
 }
 
+.booking-slot-grid__day-label {
+  padding-top: 8px;
+  text-align: center;
+  font-family: Helvetica Neue, Helvetica, Arial, sans-serif;
+  font-size: 10px;
+  font-weight: 300;
+  line-height: 1.25;
+  color: #818181;
+  min-width: 0;
+}
+
+@media (min-width: 640px) {
+  .booking-slot-grid__day-label {
+    font-size: 12px;
+  }
+}
+
 .booking-slot-grid__cell {
   width: 100%;
-  height: 18px;
+  height: var(--bsg-row-height);
   border: none;
   border-radius: 6px;
   padding: 0;
-  flex-shrink: 0;
+  min-width: 0;
   transition: opacity 0.15s ease;
 }
 

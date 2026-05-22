@@ -1,4 +1,4 @@
-import { getApps, initializeApp } from 'firebase/app'
+import { getApp, getApps, initializeApp } from 'firebase/app'
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -9,6 +9,7 @@ import {
   sendEmailVerification,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore'
+import { normalizeIngeInviteCode, useIngeInvites } from './useIngeInvites'
 
 export type UserRole = 'booker' | 'inge' | 'beatmaker' | 'admin'
 
@@ -77,12 +78,40 @@ export const useAuth = () => {
       initializeApp(firebaseConfig)
     }
 
-    const auth = getAuth()
-    const db = getFirestore()
+    const app = getApp()
+    const auth = getAuth(app)
+    const db = getFirestore(app)
     return { auth, db }
   }
 
+  /** Pendant writeUserProfile : bloque onAuthStateChanged qui remettrait booker trop tôt */
+  const profileWriteLock = useState('authProfileWriteLock', () => false)
+
+  const readProfileFromFirestore = async (uid: string, retries = 4): Promise<AppUser | null> => {
+    const { db } = getClients()
+    if (!db) return null
+
+    const userRef = doc(db, 'users', uid)
+    for (let i = 0; i < retries; i++) {
+      const snap = await getDoc(userRef)
+      if (snap.exists()) {
+        const data = snap.data() as { role?: unknown; admin?: unknown; email?: unknown }
+        return {
+          uid,
+          email: (data.email as string | undefined) ?? null,
+          role: normalizeRoleFromFirestore(data),
+        }
+      }
+      if (i < retries - 1) {
+        await new Promise((r) => setTimeout(r, 150))
+      }
+    }
+    return null
+  }
+
   const fetchUserProfile = async (user: User | null) => {
+    if (profileWriteLock.value) return
+
     const { db } = getClients()
 
     if (!user) {
@@ -91,7 +120,6 @@ export const useAuth = () => {
     }
 
     if (!db) {
-      // SSR ou client sans Firebase initialisé
       if (process.client) {
         console.warn(
           '[PDS auth] Firestore indisponible (db null) — vérifie que tu es bien dans le navigateur',
@@ -101,45 +129,20 @@ export const useAuth = () => {
       return
     }
 
-    const cheminFirestore = `users/${user.uid}`
-    console.log('[PDS auth] Chargement profil →', cheminFirestore)
-
-    const userRef = doc(db, 'users', user.uid)
-    const snap = await getDoc(userRef)
-
-    if (snap.exists()) {
-      const data = snap.data() as {
-        role?: unknown
-        admin?: unknown
-        email?: unknown
-      }
-      const role = normalizeRoleFromFirestore(data)
-      console.log('[PDS auth] Document trouvé', {
-        chemin_firestore: cheminFirestore,
-        email_auth: user.email,
-        email_dans_firestore: data.email,
-        champs_bruts: { role: data.role, admin: data.admin },
-        role_normalisee: role,
-        rappel:
-          'Le rôle vient UNIQUEMENT du document dont l’ID = ton UID Auth (ci-dessus). Si tu vois admin ailleurs dans Firestore, ouvre ce document précis par ID.',
-      })
+    const profile = await readProfileFromFirestore(user.uid)
+    if (profile) {
       authUser.value = {
         uid: user.uid,
-        email: user.email,
-        role,
+        email: user.email ?? profile.email,
+        role: profile.role,
       }
-    } else {
-      console.log(
-        '[PDS auth] Aucun document users/' +
-          user.uid +
-          ' — rôle par défaut booker',
-      )
-      // fallback si aucun profil Firestore
-      authUser.value = {
-        uid: user.uid,
-        email: user.email,
-        role: 'booker',
-      }
+      return
+    }
+
+    authUser.value = {
+      uid: user.uid,
+      email: user.email,
+      role: 'booker',
     }
   }
 
@@ -153,14 +156,49 @@ export const useAuth = () => {
       onAuthStateChanged(auth, async (fbUser: User | null) => {
         authReady.value = true
 
+        if (profileWriteLock.value) return
+
         if (fbUser) {
-          console.log('[PDS auth] onAuthStateChanged: connecté', fbUser.uid)
           await fetchUserProfile(fbUser)
         } else {
-          console.log('[PDS auth] onAuthStateChanged: déconnecté')
           authUser.value = null
         }
       })
+    }
+  }
+
+  const writeUserProfile = async (
+    uid: string,
+    email: string,
+    role: UserRole,
+    fbEmail: string | null,
+  ) => {
+    const { db } = getClients()
+    if (!db) throw new Error('Firebase non initialisé côté client')
+
+    profileWriteLock.value = true
+    try {
+      const userRef = doc(db, 'users', uid)
+      await setDoc(userRef, {
+        email,
+        role,
+        createdAt: new Date(),
+      })
+
+      const profile = await readProfileFromFirestore(uid, 6)
+      if (!profile || profile.role !== role) {
+        throw new Error(
+          `Le rôle « ${role} » n’a pas pu être enregistré dans Firestore (lu : ${profile?.role ?? 'aucun document'}).`,
+        )
+      }
+
+      authUser.value = {
+        uid,
+        email: fbEmail ?? email,
+        role: profile.role,
+      }
+    } finally {
+      profileWriteLock.value = false
     }
   }
 
@@ -175,13 +213,7 @@ export const useAuth = () => {
       }
 
       const cred = await createUserWithEmailAndPassword(auth, email, password)
-      const userRef = doc(db, 'users', cred.user.uid)
-
-      await setDoc(userRef, {
-        email,
-        role,
-        createdAt: new Date(),
-      })
+      await writeUserProfile(cred.user.uid, email, role, cred.user.email)
 
       try {
         await sendEmailVerification(cred.user)
@@ -189,10 +221,98 @@ export const useAuth = () => {
         console.error('[auth] sendEmailVerification error', e)
       }
 
-      await fetchUserProfile(cred.user)
       return cred
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur lors de la création du compte'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Compte existant : connexion puis mise à jour du rôle ingé + consommation du code */
+  const activateIngeRoleWithInvite = async (
+    email: string,
+    password: string,
+    rawInviteCode: string,
+  ) => {
+    const { auth, db } = getClients()
+    const { isInviteValid, claimInviteCode } = useIngeInvites()
+    const code = normalizeIngeInviteCode(rawInviteCode)
+
+    loading.value = true
+    error.value = null
+
+    try {
+      if (!auth || !db) {
+        throw new Error('Firebase non initialisé côté client')
+      }
+
+      const valid = await isInviteValid(code)
+      if (!valid) {
+        throw new Error('Code d’invitation invalide ou déjà utilisé.')
+      }
+
+      const cred = await signInWithEmailAndPassword(auth, email, password)
+      await writeUserProfile(cred.user.uid, email, 'inge', cred.user.email)
+      await claimInviteCode(code)
+
+      return cred
+    } catch (e: any) {
+      error.value = e?.message ?? 'Impossible d’activer le compte ingé'
+      throw e
+    } finally {
+      loading.value = false
+    }
+  }
+
+  /** Inscription ingé via lien admin : rôle forcé à `inge`, code consommé après succès */
+  const signupAsIngeWithInvite = async (
+    email: string,
+    password: string,
+    rawInviteCode: string,
+  ) => {
+    const { auth, db } = getClients()
+    const { isInviteValid, claimInviteCode } = useIngeInvites()
+    const code = normalizeIngeInviteCode(rawInviteCode)
+
+    loading.value = true
+    error.value = null
+
+    try {
+      if (!auth || !db) {
+        throw new Error('Firebase non initialisé côté client')
+      }
+      if (!code) {
+        throw new Error('Code d’invitation manquant.')
+      }
+
+      const valid = await isInviteValid(code)
+      if (!valid) {
+        throw new Error('Code d’invitation invalide ou déjà utilisé.')
+      }
+
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password)
+        await writeUserProfile(cred.user.uid, email, 'inge', cred.user.email)
+        await claimInviteCode(code)
+
+        try {
+          await sendEmailVerification(cred.user)
+        } catch (e) {
+          console.error('[auth] sendEmailVerification error', e)
+        }
+
+        return cred
+      } catch (e: any) {
+        const firebaseCode = e?.code as string | undefined
+        if (firebaseCode === 'auth/email-already-in-use') {
+          return await activateIngeRoleWithInvite(email, password, code)
+        }
+        throw e
+      }
+    } catch (e: any) {
+      error.value = e?.message ?? 'Erreur lors de la création du compte ingé'
       throw e
     } finally {
       loading.value = false
@@ -247,6 +367,8 @@ export const useAuth = () => {
     loading,
     error,
     signup,
+    signupAsIngeWithInvite,
+    activateIngeRoleWithInvite,
     login,
     logout,
   }
