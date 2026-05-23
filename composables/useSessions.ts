@@ -49,6 +49,12 @@ export interface Session {
   recapSentAt?: Date | null
   /** Montant restant à payer (€). Si défini, on l'affiche ; sinon on calcule totalPrice - depositAmount. Mettre à 0 quand tout est payé. */
   remainingToPay?: number | null
+  /** Note sur 5 (avis studio après session) */
+  reviewRating?: number | null
+  /** Commentaire sur ce qui a été produit */
+  reviewNotes?: string | null
+  reviewSentAt?: Date | null
+  reviewedBy?: string | null
   createdAt: Date
 }
 
@@ -99,6 +105,16 @@ function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
       (raw.recapSentAt as Date | undefined) ??
       null,
     remainingToPay: raw.remainingToPay !== undefined ? (raw.remainingToPay as number) : undefined,
+    reviewRating:
+      raw.reviewRating !== undefined && raw.reviewRating !== null
+        ? Number(raw.reviewRating)
+        : undefined,
+    reviewNotes: (raw.reviewNotes as string | undefined) ?? undefined,
+    reviewSentAt:
+      (raw.reviewSentAt as Timestamp | undefined)?.toDate?.() ??
+      (raw.reviewSentAt as Date | undefined) ??
+      null,
+    reviewedBy: (raw.reviewedBy as string | undefined) ?? undefined,
     createdAt: (raw.createdAt as Timestamp | undefined)?.toDate?.() ?? new Date(),
   }
 }
@@ -457,6 +473,55 @@ export const useSessions = () => {
     })
   }
 
+  /** Sessions confirmées / terminées dont la date de fin est passée — base pour la page avis. */
+  const listPastSessions = async (): Promise<Session[]> => {
+    const db = getDb()
+    if (!db) return []
+    const today = new Date().toISOString().slice(0, 10)
+    const col = collection(db, 'sessions')
+    const q = query(col, where('date', '<=', today))
+    const snap = await getDocs(q)
+    const data: Session[] = []
+    snap.forEach((d) => {
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
+    })
+    const now = Date.now()
+    return data
+      .filter((s) => s.status === 'confirmed' || s.status === 'done')
+      .filter((s) => {
+        const end = new Date(`${s.date}T${s.endTime}`)
+        return !Number.isNaN(end.getTime()) && end.getTime() <= now
+      })
+      .sort((a, b) => {
+        const d = b.date.localeCompare(a.date)
+        return d !== 0 ? d : b.startTime.localeCompare(a.startTime)
+      })
+  }
+
+  const saveSessionReview = async (
+    sessionId: string,
+    reviewRating: number,
+    reviewNotes: string,
+  ) => {
+    const db = getDb()
+    const user = currentUser.value
+    if (!db || !user) throw new Error('Non autorisé')
+    const rating = Math.min(5, Math.max(1, Math.round(reviewRating)))
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      reviewRating: rating,
+      reviewNotes: reviewNotes.trim(),
+      reviewedBy: user.uid,
+    })
+  }
+
+  const markSessionReviewSent = async (sessionId: string) => {
+    const db = getDb()
+    if (!db) return
+    await updateDoc(doc(db, 'sessions', sessionId), {
+      reviewSentAt: new Date(),
+    })
+  }
+
   return {
     sessions,
     loading,
@@ -475,5 +540,8 @@ export const useSessions = () => {
     updateSessionStatus,
     updateSessionRecapSent,
     updateSessionRemainingToPay,
+    listPastSessions,
+    saveSessionReview,
+    markSessionReviewSent,
   }
 }

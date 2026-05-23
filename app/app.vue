@@ -32,11 +32,12 @@ const isBeatmakerIngeDashboard = computed(
     route.path.startsWith('/dashboard/inge'),
 )
 
-/** Admin : même shell noir + barre locale (email / déconnexion), sans « Mon compte » global */
+/** Admin / avis sessions : barre locale sans « Mon compte » global */
 const isAdminPage = computed(() => route.path.startsWith('/admin'))
+const isReviewerPage = computed(() => route.path.startsWith('/avis-sessions'))
 
 const hideGlobalAccountNav = computed(
-  () => isBeatmakerIngeDashboard.value || isAdminPage.value,
+  () => isBeatmakerIngeDashboard.value || isAdminPage.value || isReviewerPage.value,
 )
 const navOpen = ref(false)
 
@@ -48,6 +49,7 @@ const userLabel = computed(() => {
     inge: 'Ingé son',
     beatmaker: 'Beatmaker',
     admin: 'Admin',
+    reviewer: 'Avis sessions',
   }
   const role = roleLabels[u.role] ?? u.role
   return u.email ? `${u.email} (${role})` : role
@@ -58,6 +60,7 @@ const accountHref = computed(() => {
   const u = currentUser.value
   if (!u) return '/login'
   if (u.role === 'admin') return '/admin'
+  if (u.role === 'reviewer') return '/avis-sessions'
   if (u.role === 'booker' || u.role === 'inge' || u.role === 'beatmaker') {
     return `/dashboard/${u.role}`
   }
@@ -65,9 +68,12 @@ const accountHref = computed(() => {
 })
 
 /** Libellé explicite pour les admins (sinon « Mon compte » ne renvoie pas vers /admin clairement). */
-const accountNavLabel = computed(() =>
-  currentUser.value?.role === 'admin' ? 'Administration' : 'Mon compte',
-)
+const accountNavLabel = computed(() => {
+  const r = currentUser.value?.role
+  if (r === 'admin') return 'Administration'
+  if (r === 'reviewer') return 'Avis sessions'
+  return 'Mon compte'
+})
 
 function closeNav() {
   navOpen.value = false
@@ -298,7 +304,7 @@ async function handleLogout() {
           ? 'max-w-none bg-black p-0'
           : isAuthFullscreenPage
             ? 'max-w-none p-0'
-            : isBookerDashboard || isBeatmakerIngeDashboard || isAdminPage
+            : isBookerDashboard || isBeatmakerIngeDashboard || isAdminPage || isReviewerPage
               ? 'max-w-none bg-black p-0'
               : 'mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8'
       "

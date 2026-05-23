@@ -18,6 +18,8 @@ interface SessionFile {
   createdAt: Date
 }
 
+export type { SessionFile }
+
 const getClients = () => {
   if (!process.client) return { db: null as any, storage: null as any }
 
@@ -114,11 +116,74 @@ export const useSessionFiles = () => {
     }
   }
 
+  const fetchForSession = async (sessionId: string): Promise<SessionFile[]> => {
+    const { db } = getClients()
+    if (!db) return []
+
+    const col = collection(db, 'sessionFiles')
+    const q = query(col, where('sessionId', '==', sessionId))
+    const snap = await getDocs(q)
+
+    const data: SessionFile[] = []
+    snap.forEach((d) => {
+      const raw = d.data() as {
+        sessionId: string
+        fileName: string
+        url: string
+        createdAt?: Timestamp
+      }
+      data.push({
+        id: d.id,
+        sessionId: raw.sessionId,
+        fileName: raw.fileName,
+        url: raw.url,
+        createdAt: raw.createdAt?.toDate() ?? new Date(),
+      })
+    })
+    data.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+    return data
+  }
+
+  /** Tous les fichiers ingé, groupés par sessionId (pour filtrage page avis). */
+  const fetchAllGroupedBySession = async (): Promise<Map<string, SessionFile[]>> => {
+    const { db } = getClients()
+    const map = new Map<string, SessionFile[]>()
+    if (!db) return map
+
+    const col = collection(db, 'sessionFiles')
+    const snap = await getDocs(col)
+    snap.forEach((d) => {
+      const raw = d.data() as {
+        sessionId: string
+        fileName: string
+        url: string
+        createdAt?: Timestamp
+      }
+      const file: SessionFile = {
+        id: d.id,
+        sessionId: raw.sessionId,
+        fileName: raw.fileName,
+        url: raw.url,
+        createdAt: raw.createdAt?.toDate() ?? new Date(),
+      }
+      const list = map.get(raw.sessionId) ?? []
+      list.push(file)
+      map.set(raw.sessionId, list)
+    })
+    for (const [id, list] of map) {
+      list.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
+      map.set(id, list)
+    }
+    return map
+  }
+
   return {
     files,
     loading,
     error,
     listForSession,
+    fetchForSession,
+    fetchAllGroupedBySession,
     uploadForSession,
   }
 }

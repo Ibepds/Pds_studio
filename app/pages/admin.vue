@@ -2,6 +2,7 @@
 import { definePageMeta, navigateTo } from '#imports'
 import { useRoute } from 'vue-router'
 import { useAuth } from '../../composables/useAuth'
+import { useReviewer } from '../../composables/useReviewer'
 
 definePageMeta({
   middleware: 'require-auth',
@@ -10,13 +11,20 @@ definePageMeta({
 
 const route = useRoute()
 const { currentUser, logout } = useAuth()
+const { canAccessReviews } = useReviewer()
 
-const navLinks = [
-  { to: '/admin/indicateurs', label: 'Indicateurs' },
-  { to: '/admin/calendrier', label: 'Calendrier' },
-  { to: '/admin/sessions', label: 'Sessions' },
-  { to: '/admin/equipe', label: 'Équipe' },
-]
+const navLinks = computed(() => {
+  const links = [
+    { to: '/admin/indicateurs', label: 'Indicateurs' },
+    { to: '/admin/calendrier', label: 'Calendrier' },
+    { to: '/admin/sessions', label: 'Sessions' },
+    { to: '/admin/equipe', label: 'Équipe' },
+  ]
+  if (canAccessReviews.value) {
+    links.push({ to: '/avis-sessions', label: 'Avis sessions' })
+  }
+  return links
+})
 
 function isActive(to: string) {
   if (to === '/admin/indicateurs') {

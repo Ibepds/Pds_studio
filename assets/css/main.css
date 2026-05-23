@@ -284,7 +284,7 @@ button.btn-secondary.text-red-400:hover:not(:disabled) {
 }
 
 /* Autres <button> (onglets, calendrier…) — sans écraser .btn-primary / .btn-secondary / .pds-option */
-button:not(.btn-primary):not(.btn-secondary):not(.pds-option):not(.pds-sessions-ui):hover:not(:disabled):not([class*='border-red']) {
+button:not(.btn-primary):not(.btn-secondary):not(.pds-option):not(.pds-sessions-ui):not(.star-rating__btn):hover:not(:disabled):not([class*='border-red']) {
   background-image: var(--pds-hover-gradient);
   color: #fff;
   border-color: rgba(255, 255, 255, 0.5);

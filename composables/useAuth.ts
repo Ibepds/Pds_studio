@@ -9,9 +9,10 @@ import {
   sendEmailVerification,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore'
+import { watch } from 'vue'
 import { normalizeIngeInviteCode, useIngeInvites } from './useIngeInvites'
 
-export type UserRole = 'booker' | 'inge' | 'beatmaker' | 'admin'
+export type UserRole = 'booker' | 'inge' | 'beatmaker' | 'admin' | 'reviewer'
 
 export interface AppUser {
   uid: string
@@ -43,7 +44,8 @@ function normalizeRoleFromFirestore(data: {
   }
   if (r === 'beatmaker' || r === 'producer') return 'beatmaker'
   if (r === 'booker') return 'booker'
-  if (r === 'inge' || r === 'beatmaker' || r === 'admin') return r as UserRole
+  if (r === 'reviewer' || r === 'critique' || r === 'avis') return 'reviewer'
+  if (r === 'inge' || r === 'beatmaker' || r === 'admin' || r === 'reviewer') return r as UserRole
   return 'booker'
 }
 
@@ -154,15 +156,18 @@ export const useAuth = () => {
       authWatcherInitialized = true
 
       onAuthStateChanged(auth, async (fbUser: User | null) => {
-        authReady.value = true
-
-        if (profileWriteLock.value) return
+        if (profileWriteLock.value) {
+          authReady.value = true
+          return
+        }
 
         if (fbUser) {
           await fetchUserProfile(fbUser)
         } else {
           authUser.value = null
         }
+
+        authReady.value = true
       })
     }
   }
@@ -360,6 +365,35 @@ export const useAuth = () => {
     }
   }
 
+  /** Attendre Firebase Auth + profil Firestore (middleware / login). */
+  const ensureAuthReady = async () => {
+    if (!process.client) return
+
+    if (authReady.value) {
+      const { auth } = getClients()
+      if (!auth?.currentUser || currentUser.value) return
+    }
+
+    await new Promise<void>((resolve) => {
+      const stop = watch(
+        [authReady, authUser],
+        () => {
+          if (!authReady.value) return
+          const { auth } = getClients()
+          if (!auth?.currentUser || currentUser.value) {
+            stop()
+            resolve()
+          }
+        },
+        { immediate: true },
+      )
+      setTimeout(() => {
+        stop()
+        resolve()
+      }, 4000)
+    })
+  }
+
   return {
     authUser,
     authReady,
@@ -371,5 +405,6 @@ export const useAuth = () => {
     activateIngeRoleWithInvite,
     login,
     logout,
+    ensureAuthReady,
   }
 }

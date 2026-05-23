@@ -1,32 +1,10 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { onBeforeUnmount, ref } from 'vue'
 import { navigateTo } from '#app'
 import { useSessions, type Session } from '../../composables/useSessions'
 import { usePaypal } from '../../composables/usePaypal'
-import type { BookingKindOption } from '../types/bookingKind'
 
-const route = useRoute()
 const activeTab = ref<'reserver' | 'payer'>('reserver')
-/** Après l’étape visuelle Beatmaker / Ingé */
-const bookingKind = ref<BookingKindOption | null>(null)
-
-function kindFromQuery(q: unknown): BookingKindOption | null {
-  const k = Array.isArray(q) ? q[0] : q
-  if (k === 'beatmaker' || k === 'inge') return k
-  return null
-}
-
-function applyKindFromRoute() {
-  const k = kindFromQuery(route.query.kind)
-  if (k) {
-    bookingKind.value = k
-    activeTab.value = 'reserver'
-  }
-}
-
-onMounted(applyKindFromRoute)
-watch(() => route.query.kind, applyKindFromRoute)
 
 const reservationSearch = ref('')
 const searchResults = ref<Session[]>([])
@@ -71,18 +49,6 @@ const { findUnpaidByReservationName, updateSessionStatus } = useSessions()
 const depositForSession = (s: Session) =>
   s.depositAmount ?? Math.round((s.totalPrice ?? 50) * 0.3)
 
-function onKindContinue(kind: BookingKindOption) {
-  bookingKind.value = kind
-}
-
-function backToKindPick() {
-  bookingKind.value = null
-}
-
-function onBookerBooked() {
-  bookingKind.value = null
-}
-
 const searchReservations = async () => {
   searchError.value = null
   paypalError.value = null
@@ -120,8 +86,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
     const valueApi = (typeof deposit === 'number' ? deposit : 50).toFixed(2)
     paypal
       .Buttons({
-        // Forcer l’interface PayPal (pas “Debit or Credit Card”).
-        // Format simple pour compatibilité SDK.
         fundingSource: paypal?.FUNDING?.PAYPAL ?? undefined,
         disableFunding: 'card',
         createOrder: (_data: any, actions: any) =>
@@ -158,7 +122,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
 
 <template>
   <div class="reserver-page min-w-0">
-    <!-- Écrans succès / échec (6 secondes) -->
     <div
       v-if="paymentResult"
       class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[95] flex items-center justify-center"
@@ -210,9 +173,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
       </div>
     </div>
 
-    <!-- Bandeau d’onglets (masqué sur la hero plein écran initiale) -->
     <div
-      v-if="bookingKind || activeTab === 'payer'"
       class="sticky top-[3.25rem] z-40 border-b border-white/10 bg-black/85 backdrop-blur-md sm:top-[4.25rem]"
     >
       <div class="mx-auto flex max-w-4xl justify-center gap-2 px-4 py-3 sm:gap-3">
@@ -243,52 +204,12 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
       </div>
     </div>
 
-    <!-- Tab réservation -->
     <template v-if="activeTab === 'reserver'">
-      <div v-if="!bookingKind" class="relative">
-        <!-- Mobile : accès paiement invité en haut (sous la navbar) -->
-        <div
-          class="sticky top-[3.25rem] z-30 border-b border-white/10 bg-black/90 px-4 py-3 text-center backdrop-blur-md sm:top-[4.25rem] md:hidden"
-        >
-          <button
-            type="button"
-            class="text-sm font-medium text-white/80 transition-colors hover:text-white"
-            @click="activeTab = 'payer'"
-          >
-            Payer un acompte sans compte →
-          </button>
-        </div>
-        <BookingKindLanding variant="buttons" @choose="onKindContinue" />
-        <p
-          class="pointer-events-auto absolute bottom-6 left-0 right-0 z-20 hidden text-center md:block sm:bottom-10"
-        >
-          <button
-            type="button"
-            class="text-sm text-white/70 transition-colors hover:text-white"
-            @click="activeTab = 'payer'"
-          >
-            Payer un acompte sans compte →
-          </button>
-        </p>
-      </div>
-      <div v-else class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
-        <button
-          type="button"
-          class="mb-8 text-sm text-[var(--pds-muted)] transition-colors hover:text-[var(--pds-primary)]"
-          @click="backToKindPick"
-        >
-          ← Changer le type de session
-        </button>
-        <Booker
-          mode="reserver"
-          :booking-kind="bookingKind"
-          @booked="onBookerBooked"
-          @back-kind="backToKindPick"
-        />
+      <div class="mx-auto max-w-6xl px-4 py-10 sm:px-6">
+        <Booker mode="reserver" booking-kind="inge" />
       </div>
     </template>
 
-    <!-- Tab paiement invité -->
     <div
       v-else
       class="relative -mx-4 overflow-hidden rounded-2xl sm:-mx-6 min-h-[calc(100dvh-160px)]"
@@ -309,7 +230,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
             </p>
           </div>
 
-          <!-- Bloc recherche -->
           <div class="rounded-2xl border border-[var(--pds-border)] bg-[rgba(21,21,21,0.6)] p-6 sm:p-8">
             <div class="space-y-2">
               <label class="font-[Raleway,sans-serif] text-lg font-medium text-white/70">
@@ -336,7 +256,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
             </p>
           </div>
 
-          <!-- Résultats -->
           <div v-if="searchResults.length" class="space-y-6">
             <h3 class="font-[Raleway,sans-serif] text-2xl font-bold text-white">Réservations trouvées</h3>
             <div class="space-y-4">
@@ -346,7 +265,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
                 class="rounded-2xl border border-[var(--pds-border)] bg-[var(--pds-bg)] p-6"
               >
                 <div class="flex flex-col gap-8 lg:flex-row lg:items-start lg:gap-10">
-                  <!-- Colonne gauche : info -->
                   <div class="flex w-full flex-col gap-5 lg:max-w-[420px]">
                     <div class="flex flex-wrap items-center justify-between gap-2">
                       <h3 class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white">
@@ -377,10 +295,8 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
                     </dl>
                   </div>
 
-                  <!-- Séparateur desktop -->
                   <div class="hidden h-auto min-h-[220px] w-px shrink-0 bg-white/30 lg:block" aria-hidden="true" />
 
-                  <!-- Colonne droite : résumé -->
                   <div class="flex w-full flex-col gap-5 lg:max-w-[420px]">
                     <h3 class="font-[Raleway,sans-serif] text-2xl font-bold leading-tight text-white">
                       Résumé de la commande
@@ -389,9 +305,6 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
                     <div class="flex flex-col gap-3 font-[Raleway,sans-serif] text-lg font-medium text-white">
                       <p class="text-white/90">
                         {{ s.date }} — {{ s.startTime }}–{{ s.endTime }}
-                      </p>
-                      <p class="text-sm text-white/60">
-                        Studio : <strong class="text-white/90">{{ s.style }}</strong>
                       </p>
                       <p class="text-sm text-white/60">
                         Total : <strong class="text-white/90">{{ s.totalPrice ?? 0 }}€</strong> · Acompte 30%

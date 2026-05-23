@@ -1,35 +1,40 @@
 import { useAuth, type UserRole } from '../../composables/useAuth'
 
 export default defineNuxtRouteMiddleware(async (to) => {
-  const { currentUser, authReady } = useAuth()
+  if (import.meta.server) return
 
-  // Attendre que l'auth soit prête côté client
-  if (process.client && !authReady.value) {
-    await new Promise<void>((resolve) => {
-      const stop = watch(
-        authReady,
-        (ready) => {
-          if (ready) {
-            stop()
-            resolve()
-          }
-        },
-        { immediate: true },
-      )
-    })
-  }
+  const { currentUser, ensureAuthReady } = useAuth()
+  await ensureAuthReady()
 
   const user = currentUser.value
+  const authRoles = to.meta.authRoles as UserRole[] | undefined
+
+  if (authRoles?.length) {
+    if (!user) {
+      return navigateTo({
+        path: '/login',
+        query: { redirect: to.fullPath },
+      })
+    }
+    if (user.role !== 'admin' && !authRoles.includes(user.role)) {
+      return navigateTo('/')
+    }
+    return
+  }
+
   if (!user) {
-    return navigateTo('/login')
+    return navigateTo({
+      path: '/login',
+      query: { redirect: to.fullPath },
+    })
   }
 
   const requiredRole = (to.meta.role as UserRole | undefined) ?? undefined
   if (requiredRole && user.role !== requiredRole && user.role !== 'admin') {
-    // Rediriger vers le dashboard correspondant au rôle de l'utilisateur
     if (user.role === 'booker') return navigateTo('/dashboard/booker')
     if (user.role === 'inge') return navigateTo('/dashboard/inge')
     if (user.role === 'beatmaker') return navigateTo('/dashboard/beatmaker')
+    if (user.role === 'reviewer') return navigateTo('/avis-sessions')
     return navigateTo('/')
   }
 })

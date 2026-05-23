@@ -25,7 +25,7 @@ const props = withDefaults(
   }>(),
   {
     mode: 'all',
-    bookingKind: null,
+    bookingKind: 'inge',
   },
 )
 
