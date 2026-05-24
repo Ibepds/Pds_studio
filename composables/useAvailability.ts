@@ -183,6 +183,7 @@ export const useAvailability = () => {
       return out
     } catch (e: any) {
       error.value = e?.message ?? 'Erreur chargement disponibilités'
+      console.log(e)
       return []
     } finally {
       loading.value = false

@@ -1,63 +1,58 @@
-# Créneaux invités — règles Firestore
+# Créneaux sans connexion — déploiement Firestore OBLIGATOIRE
 
-## Cause
+Le code en ligne **ne suffit pas** : il faut **publier les règles Firestore** sur le même projet Firebase que la prod.
 
-Sans connexion, le booker charge :
+Sans ça, les invités ne peuvent pas lire les ingés ni les disponibilités → **aucun créneau** sur le calendrier.
 
-1. `users` (liste des ingés) → `allow read: if isSignedIn()` ❌
-2. `availability` (dispos ingés) → `allow read: if isSignedIn()` ❌
-3. `sessions` (créneaux déjà réservés) → lecture réservée aux connectés ❌
+## Déployer depuis le projet
 
-Résultat : listes vides, aucun créneau affiché.
+```bash
+firebase login
+firebase use VOTRE_PROJECT_ID
+firebase deploy --only firestore:rules
+```
 
-## Correctifs à appliquer dans la console Firebase
+Le fichier `firestore.rules` à la racine du repo contient les règles PDS.  
+Si vous utilisez aussi **ComptaIBE** (`ibe_apps/...`), **fusionnez** les blocs ci-dessous dans votre fichier Firebase Console au lieu d’écraser tout le projet.
 
-Remplacez **uniquement** les blocs `users`, `sessions` et `availability` par ceux ci-dessous (gardez `ibe_apps`, `beats`, `sessionFiles`, `ingeInvites`, catch-all, etc.).
+## 3 modifications dans la console Firebase (Rules)
 
-### `users`
+### 1. `match /users/{userId}` — lecture
+
+Remplacez la ligne `allow read` par :
 
 ```javascript
 allow read: if isSignedIn()
   || resource.data.role in ['inge', 'beatmaker'];
 ```
 
-### `availability`
+### 2. `match /availability/{docId}` — lecture
 
 ```javascript
 allow read: if true;
 ```
 
-(L’écriture reste réservée aux ingés/beatmakers connectés.)
+### 3. `match /sessions/{sessionId}` — lecture
 
-### `sessions` — ajouter à la condition `allow read`
+Ajoutez à la condition `allow read` (en plus du reste) :
 
 ```javascript
 || resource.data.status in ['waiting_payment', 'pending', 'confirmed']
 ```
 
-Exemple complet :
+Puis **Publier** les règles.
 
-```javascript
-allow read: if isAdmin()
-  || (isSignedIn() && resource.data.bookerId == request.auth.uid)
-  || isInge()
-  || isBeatmaker()
-  || isBooker()
-  || resource.data.status in ['waiting_payment', 'pending', 'confirmed'];
-```
+## Index Firestore (après déploiement du code)
 
-### Paiement PayPal invité (optionnel si capture côté client)
+Si le calendrier affiche une erreur d’index, créez l’index composite demandé dans la console (lien dans F12 → Console) :
 
-```javascript
-function isPaypalDepositUpdate() {
-  return resource.data.status == 'waiting_payment'
-    && request.resource.data.status == 'pending'
-    && request.resource.data.paypalOrderId is string
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paypalOrderId']);
-}
+- Collection `sessions`
+- Champs : `date` (Ascending), `status` (Ascending)
 
-// Dans allow update:
-|| isPaypalDepositUpdate()
-```
+## Vérification rapide
 
-Puis `firebase deploy --only firestore:rules`.
+1. Ouvre `/reserver` en **navigation privée** (non connecté).
+2. Choisis une **durée** (ex. 2 h).
+3. Des cases vertes / cliquables doivent apparaître sur les jours où un ingé a des dispos.
+
+Si rien n’apparaît : F12 → onglet **Console** → erreur `permission-denied` = règles pas encore déployées.

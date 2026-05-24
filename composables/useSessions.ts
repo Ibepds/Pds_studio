@@ -156,13 +156,17 @@ export const useSessions = () => {
     }
   }
 
-  /** Toutes les sessions pour une date donnée (pour calcul des créneaux déjà pris). Sans orderBy pour éviter l'index composite Firestore. */
+  /** Sessions occupant un créneau sur une date (hors annulées / terminées). Requête filtrée pour les invités (règles Firestore). */
   const listSessionsForDate = async (date: string): Promise<Session[]> => {
     const db = getDb()
     if (!db) return []
 
     const col = collection(db, 'sessions')
-    const q = query(col, where('date', '==', date))
+    const q = query(
+      col,
+      where('date', '==', date),
+      where('status', 'in', ['waiting_payment', 'pending', 'confirmed']),
+    )
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {

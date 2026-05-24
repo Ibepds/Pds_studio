@@ -48,7 +48,7 @@ const {
   error: filesError,
   listForSession,
 } = useSessionFiles()
-const { listByRole: listUsersByRole } = useUsers()
+const { listByRole: listUsersByRole, error: usersListError } = useUsers()
 const { getSlotsForUsersOnDate } = useAvailability()
 const { upload: uploadBookerProd } = useBookerProdUpload()
 const { currentUser } = useAuth()
@@ -301,6 +301,9 @@ async function computeAvailableStartsForDate(
   if (!d || dur == null || !kind) return []
   const role = kind === 'beatmaker' ? 'beatmaker' : 'inge'
   const pros = await listUsersByRole(role)
+  if (!pros.length && usersListError.value) {
+    throw new Error(usersListError.value)
+  }
   const proIds = pros.map((p) => p.uid)
   const unavailMap =
     proIds.length > 0
@@ -372,14 +375,24 @@ async function loadWeekData() {
     weekAvailabilityMap.value = Object.fromEntries(availEntries)
     occupiedHoursByDate.value = Object.fromEntries(occEntries)
     syncAvailabilityForSelectedDate()
+    localError.value = null
   } catch (e: unknown) {
     weekAvailabilityMap.value = {}
     occupiedHoursByDate.value = {}
     availableStartHoursList.value = []
     const msg = e instanceof Error ? e.message : String(e)
-    if (msg.includes('permission') || msg.includes('Permission')) {
+    const isPermission =
+      msg.includes('permission') ||
+      msg.includes('Permission') ||
+      msg.includes('insufficient permissions')
+    if (isPermission) {
       localError.value =
-        'Impossible de charger les créneaux (accès Firestore). Vérifiez les règles : lecture publique de availability, users (inge/beatmaker) et sessions (pending/confirmed).'
+        'Impossible de charger les créneaux : les règles Firestore en production ne permettent pas la lecture sans connexion. Déployez les règles (users ingé, availability, sessions) — voir docs/firestore-rules-guest-slots.md'
+    } else if (msg.includes('index') || msg.includes('Index')) {
+      localError.value =
+        'Index Firestore manquant pour les sessions. Ouvre la console Firebase et crée l’index proposé dans l’erreur du navigateur (F12).'
+    } else if (msg) {
+      localError.value = `Impossible de charger les créneaux : ${msg}`
     }
   } finally {
     loadingSlots.value = false
@@ -651,11 +664,15 @@ function restToPayForSession(s: any): number {
             v-if="
               durationHours &&
               !loadingSlots &&
+              !localError &&
               (weekHasNoSlots || (date && availableStartHoursList.length === 0))
             "
             class="text-sm text-amber-400"
           >
             {{ noSlotsHint }}
+          </p>
+          <p v-if="localError && durationHours" class="text-sm text-red-400">
+            {{ localError }}
           </p>
         </div>
       </div>
