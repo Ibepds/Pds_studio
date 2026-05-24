@@ -4,7 +4,7 @@ import { navigateTo } from '#app'
 import { useSessions } from '../../composables/useSessions'
 import { useSessionFiles } from '../../composables/useSessionFiles'
 import { useBookerProdUpload } from '../../composables/useBookerProdUpload'
-import { usePaypal } from '../../composables/usePaypal'
+import { usePaypalCheckout } from '../../composables/usePaypalCheckout'
 import { useAuth } from '../../composables/useAuth'
 import {
   filterOutBookedSlots,
@@ -39,7 +39,6 @@ const {
   listForCurrentBooker,
   listSessionsForDate,
   bookSession,
-  updateSessionStatus,
   loading: sessionsLoading,
   error: sessionsError,
 } = useSessions()
@@ -59,6 +58,8 @@ const date = ref<string>('')
 const startHour = ref<number | null>(null)
 const artistFirstName = ref<string>('')
 const artistLastName = ref<string>('')
+/** Nom pour retrouver la réservation dans « Payer sans compte » */
+const reservationName = ref<string>('')
 const contactPhone = ref<string>('')
 const contactEmail = ref<string>('')
 const bookerNotes = ref<string>('')
@@ -87,8 +88,8 @@ const occupiedHoursByDate = ref<Record<string, number[]>>({})
 const availableStartHoursList = ref<number[]>([])
 const loadingSlots = ref(false)
 
-const paypalError = ref<string | null>(null)
-const paypalRenderedFor = ref<string | null>(null)
+const { paypalError, paypalLoading, depositForSession, renderPaypalButton, destroyPaypalButton } =
+  usePaypalCheckout()
 
 /** Overlay pendant le lancement PayPal (étape "Confirmer et payer"). */
 const paymentModalOpen = ref(false)
@@ -199,10 +200,15 @@ const recapEmailDisplay = computed(
   () => contactEmail.value.trim() || currentUser.value?.email || '—',
 )
 
+const effectiveReservationName = computed(
+  () => reservationName.value.trim() || artistFullName.value,
+)
+
 const canBook = computed(() => {
   const hasCoreFields =
     artistFirstName.value.trim() &&
     artistLastName.value.trim() &&
+    effectiveReservationName.value &&
     contactPhone.value.trim() &&
     date.value &&
     durationHours.value &&
@@ -237,6 +243,7 @@ const canProceedContactStep = computed(() => {
   return !!(
     artistFirstName.value.trim() &&
     artistLastName.value.trim() &&
+    effectiveReservationName.value &&
     contactPhone.value.trim() &&
     email
   )
@@ -244,7 +251,12 @@ const canProceedContactStep = computed(() => {
 
 function nextBookingStep() {
   if (bookingStep.value === 1 && canProceedSlotStep.value) bookingStep.value = 2
-  else if (bookingStep.value === 2 && canProceedContactStep.value) bookingStep.value = 3
+  else if (bookingStep.value === 2 && canProceedContactStep.value) {
+    if (!reservationName.value.trim() && artistFullName.value) {
+      reservationName.value = artistFullName.value
+    }
+    bookingStep.value = 3
+  }
 }
 
 function prevBookingStep() {
@@ -360,10 +372,15 @@ async function loadWeekData() {
     weekAvailabilityMap.value = Object.fromEntries(availEntries)
     occupiedHoursByDate.value = Object.fromEntries(occEntries)
     syncAvailabilityForSelectedDate()
-  } catch {
+  } catch (e: unknown) {
     weekAvailabilityMap.value = {}
     occupiedHoursByDate.value = {}
     availableStartHoursList.value = []
+    const msg = e instanceof Error ? e.message : String(e)
+    if (msg.includes('permission') || msg.includes('Permission')) {
+      localError.value =
+        'Impossible de charger les créneaux (accès Firestore). Vérifiez les règles : lecture publique de availability, users (inge/beatmaker) et sessions (pending/confirmed).'
+    }
   } finally {
     loadingSlots.value = false
   }
@@ -484,7 +501,7 @@ const handleBook = async () => {
       startTime,
       endTime,
       style: sessionStyleLabel.value,
-      reservationName: artistFullName.value,
+      reservationName: effectiveReservationName.value,
       bookerPhone: contactPhone.value.trim(),
       bookerNotes: bookerNotes.value.trim() || undefined,
       bookerProdUrl,
@@ -500,59 +517,6 @@ const handleBook = async () => {
     paymentModalSessionId.value = createdSessionId
     await nextTick()
     await initPaypalBooking(createdSessionId, depositAmount.value)
-
-    try {
-      const notifyRole = props.bookingKind === 'beatmaker' ? 'beatmaker' : 'inge'
-      const pros = await listUsersByRole(notifyRole)
-      const proIds = pros.map((p) => p.uid)
-      const unavailMap =
-        proIds.length > 0 ? await getSlotsForUsersOnDate(proIds, date.value) : new Map()
-      const sessionSlot = { start: startTime, end: endTime }
-      const concerned = pros.filter(
-        (p) => !slotOverlapsAny(sessionSlot, unavailMap.get(p.uid) ?? []),
-      )
-      const recipientEmails = concerned.map((p) => p.email).filter(Boolean) as string[]
-      const recipientPhones = concerned.map((p) => p.phone).filter(Boolean) as string[]
-      await $fetch('/api/notify-booking', {
-        method: 'POST',
-        body: {
-          session: {
-            date: date.value,
-            startTime,
-            endTime,
-            bookerEmail: email || null,
-            style: sessionStyleLabel.value,
-            durationHours: durationHours.value,
-            totalPrice: totalPrice.value,
-          },
-          recipientEmails,
-          recipientPhones,
-        },
-      })
-    } catch (e) {
-      console.error('Notify booking', e)
-    }
-
-    if (email) {
-      try {
-        await new Promise((r) => setTimeout(r, 1100))
-        await $fetch('/api/send-booking-confirmation', {
-          method: 'POST',
-          body: {
-            session: {
-              bookerEmail: email,
-              date: date.value,
-              startTime,
-              endTime,
-              durationHours: durationHours.value,
-            },
-          },
-        })
-        console.log('Booking confirmation sent', email)
-      } catch (e) {
-        console.error('Send booking confirmation', e)
-      }
-    }
   } catch (e: any) {
     localError.value = e?.message ?? 'Erreur lors de la réservation.'
     uploadingProd.value = false
@@ -560,62 +524,26 @@ const handleBook = async () => {
 }
 
 const initPaypalBooking = async (sessionId: string, deposit: number) => {
-  paypalError.value = null
   success.value = null
-  try {
-    // Récupérer le chargeur au clic (côté client) pour éviter le contexte SSR
-    const loadPaypalFn = usePaypal()
-    const paypal = await loadPaypalFn()
-    if (!paypal) throw new Error('PayPal non disponible')
-    if (paypalRenderedFor.value === sessionId) return
-    const valueApi = (typeof deposit === 'number' ? deposit : 50).toFixed(2)
-    paypal
-      .Buttons({
-        // Forcer l’interface PayPal (pas “Debit or Credit Card”).
-        // Format simple pour compatibilité SDK.
-        fundingSource: paypal?.FUNDING?.PAYPAL ?? undefined,
-        disableFunding: 'card',
-        createOrder: (_data: any, actions: any) =>
-          actions.order.create({
-            purchase_units: [
-              {
-                amount: { value: valueApi, currency_code: 'EUR' },
-                description: 'Acompte 30% — réservation session studio PDS',
-              },
-            ],
-          }),
-        onApprove: async (data: any, actions: any) => {
-          await actions.order.capture()
-          const orderId = data?.orderID
-          success.value = 'Paiement PayPal effectué, en attente de confirmation ingé.'
-          paymentModalOpen.value = false
-          paymentModalSessionId.value = null
-          try {
-            await updateSessionStatus(sessionId, 'pending', orderId)
-          } catch (e) {
-            console.error(e)
-          }
-
-          // Rafraîchir l'état (utile pour l'écran "Mes réservations")
-          await listForCurrentBooker()
-
-          showPaymentResult('success')
-        },
-        onError: () => {
-          paypalError.value = 'Erreur lors du paiement PayPal.'
-          paymentModalOpen.value = false
-          paymentModalSessionId.value = null
-          showPaymentResult('error')
-        },
-      })
-      .render(`#paypal-button-${sessionId}`)
-    paypalRenderedFor.value = sessionId
-  } catch (e: any) {
-    paypalError.value = e?.message ?? 'Impossible de charger PayPal.'
-  }
+  await renderPaypalButton({
+    containerId: `paypal-button-${sessionId}`,
+    sessionId,
+    depositEur: deposit,
+    force: true,
+    onSuccess: async () => {
+      success.value = 'Paiement PayPal effectué, en attente de confirmation ingé.'
+      paymentModalOpen.value = false
+      paymentModalSessionId.value = null
+      await listForCurrentBooker()
+      showPaymentResult('success')
+    },
+    onError: () => {
+      paymentModalOpen.value = false
+      paymentModalSessionId.value = null
+      showPaymentResult('error')
+    },
+  })
 }
-
-const depositForSession = (s: any) => s.depositAmount ?? Math.round((s.totalPrice ?? 50) * 0.3)
 
 const noSlotsHint = computed(() =>
   props.bookingKind === 'beatmaker'
@@ -789,6 +717,19 @@ function restToPayForSession(s: any): number {
                   class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
                 />
               </div>
+              <div class="flex flex-col gap-1.5">
+                <label class="font-[Raleway,sans-serif] text-sm font-medium text-white/60">
+                  Nom de la réservation
+                  <span class="text-white/40">(pour payer sans compte plus tard)</span>
+                </label>
+                <input
+                  v-model="reservationName"
+                  type="text"
+                  autocomplete="off"
+                  placeholder="Ex. Session EP, Mix single, Prénom Nom…"
+                  class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
+                />
+              </div>
               <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-[15px]">
                 <input
                   v-model="contactPhone"
@@ -854,20 +795,22 @@ function restToPayForSession(s: any): number {
         <!-- Overlay pendant que PayPal est lancé -->
         <div
           v-if="paymentModalOpen && paymentModalSessionId"
-          class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[80] flex items-center justify-center"
+          class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[80] flex flex-col items-center justify-center px-4"
         >
           <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" />
-          <div class="absolute inset-0 pointer-events-none z-0">
+          <div class="pointer-events-none absolute inset-0 z-0">
             <FigmaLandingBackground variant="slot" />
-            <h2
-              class="absolute left-1/2 top-1/2 w-[min(100%,26rem)] -translate-x-1/2 -translate-y-1/2 px-4 text-center font-[Raleway,sans-serif] text-[clamp(1.25rem,5vw,3.125rem)] font-extrabold uppercase leading-tight tracking-wide text-white [text-wrap:balance]"
-            >
-              PAIEMENT EN COURS...
-            </h2>
           </div>
-          <div class="relative z-10 w-full px-4">
-            <div class="mx-auto w-fit pointer-events-auto">
-              <div :id="`paypal-button-${paymentModalSessionId}`" />
+          <h2
+            class="relative z-10 w-[min(100%,26rem)] px-4 text-center font-[Raleway,sans-serif] text-[clamp(1.25rem,5vw,3.125rem)] font-extrabold uppercase leading-tight tracking-wide text-white [text-wrap:balance]"
+          >
+            PAIEMENT EN COURS...
+          </h2>
+          <div class="relative z-10 mt-10 w-full sm:mt-14">
+            <div class="pointer-events-auto mx-auto w-fit min-w-[200px]">
+              <p v-if="paypalLoading" class="mb-3 text-center text-sm text-white/60">Chargement PayPal…</p>
+              <div :id="`paypal-button-${paymentModalSessionId}`" class="min-h-[45px]" />
+              <p v-if="paypalError" class="mt-3 max-w-sm text-center text-sm text-red-400">{{ paypalError }}</p>
             </div>
           </div>
         </div>
@@ -901,6 +844,10 @@ function restToPayForSession(s: any): number {
                     <div class="flex flex-col gap-1">
                       <dt>Nom</dt>
                       <dd class="text-white/90">{{ artistLastName }}</dd>
+                    </div>
+                    <div class="flex flex-col gap-1">
+                      <dt>Nom de la réservation</dt>
+                      <dd class="text-white/90">{{ effectiveReservationName }}</dd>
                     </div>
                     <div class="flex flex-col gap-1">
                       <dt>Email</dt>

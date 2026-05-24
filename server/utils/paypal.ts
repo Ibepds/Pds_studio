@@ -1,0 +1,145 @@
+import { depositAmountToPaypalValue } from '../../utils/sessionDeposit'
+
+export type PayPalMode = 'sandbox' | 'live'
+
+export function getPaypalApiBase(mode: PayPalMode): string {
+  return mode === 'live' ? 'https://api-m.paypal.com' : 'https://api-m.sandbox.paypal.com'
+}
+
+export function resolvePaypalMode(config: {
+  paypalMode?: string
+  paypalClientId?: string
+}): PayPalMode {
+  const explicit = (config.paypalMode || '').trim().toLowerCase()
+  if (explicit === 'live') return 'live'
+  if (explicit === 'sandbox') return 'sandbox'
+  const clientId = (config.paypalClientId || '').toLowerCase()
+  if (clientId.includes('sandbox') || clientId.startsWith('sb-')) return 'sandbox'
+  return 'sandbox'
+}
+
+let cachedToken: { value: string; expiresAt: number; mode: PayPalMode } | null = null
+
+export async function getPaypalAccessToken(
+  clientId: string,
+  clientSecret: string,
+  mode: PayPalMode,
+): Promise<string> {
+  const now = Date.now()
+  if (cachedToken && cachedToken.mode === mode && cachedToken.expiresAt > now + 30_000) {
+    return cachedToken.value
+  }
+
+  const apiBase = getPaypalApiBase(mode)
+  const auth = Buffer.from(`${clientId}:${clientSecret}`).toString('base64')
+  const res = await fetch(`${apiBase}/v1/oauth2/token`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${auth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: 'grant_type=client_credentials',
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    throw createError({
+      statusCode: 502,
+      message: `PayPal authentification échouée (${res.status}): ${text.slice(0, 200)}`,
+    })
+  }
+
+  const data = (await res.json()) as { access_token?: string; expires_in?: number }
+  if (!data.access_token) {
+    throw createError({ statusCode: 502, message: 'Réponse PayPal invalide (token manquant).' })
+  }
+
+  const expiresIn = (data.expires_in ?? 3600) * 1000
+  cachedToken = {
+    value: data.access_token,
+    expiresAt: now + expiresIn,
+    mode,
+  }
+  return data.access_token
+}
+
+export interface PayPalCaptureResult {
+  id: string
+  status: string
+  amountValue: string
+  currency: string
+  customId?: string
+}
+
+export async function capturePaypalOrder(
+  orderId: string,
+  accessToken: string,
+  mode: PayPalMode,
+): Promise<PayPalCaptureResult> {
+  const apiBase = getPaypalApiBase(mode)
+  const res = await fetch(`${apiBase}/v2/checkout/orders/${orderId}/capture`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+  })
+
+  const body = (await res.json()) as Record<string, unknown>
+
+  if (!res.ok) {
+    const details = JSON.stringify(body).slice(0, 400)
+    throw createError({
+      statusCode: 502,
+      message: `Capture PayPal échouée (${res.status}): ${details}`,
+    })
+  }
+
+  const status = String(body.status ?? '')
+  if (status !== 'COMPLETED') {
+    throw createError({
+      statusCode: 502,
+      message: `Commande PayPal non complétée (statut: ${status || 'inconnu'}).`,
+    })
+  }
+
+  const units = body.purchase_units as Array<Record<string, unknown>> | undefined
+  const unit = units?.[0]
+  const payments = unit?.payments as { captures?: Array<Record<string, unknown>> } | undefined
+  const capture = payments?.captures?.[0]
+  const amount = capture?.amount as { value?: string; currency_code?: string } | undefined
+
+  if (!amount?.value) {
+    throw createError({ statusCode: 502, message: 'Montant capturé PayPal introuvable.' })
+  }
+
+  return {
+    id: String(capture?.id ?? orderId),
+    status,
+    amountValue: amount.value,
+    currency: amount.currency_code ?? 'EUR',
+    customId: unit?.custom_id as string | undefined,
+  }
+}
+
+/** Vérifie que le montant capturé correspond à l’acompte attendu (tolérance 0,01 €). */
+export function assertCapturedAmountMatches(
+  capturedValue: string,
+  expectedDepositEur: number,
+  currency: string,
+): void {
+  if (currency !== 'EUR') {
+    throw createError({
+      statusCode: 400,
+      message: `Devise PayPal inattendue: ${currency} (EUR attendu).`,
+    })
+  }
+  const captured = Number.parseFloat(capturedValue)
+  const expected = Number.parseFloat(depositAmountToPaypalValue(expectedDepositEur))
+  if (!Number.isFinite(captured) || Math.abs(captured - expected) > 0.01) {
+    throw createError({
+      statusCode: 400,
+      message: `Montant PayPal (${capturedValue}€) ne correspond pas à l’acompte attendu (${expected.toFixed(2)}€).`,
+    })
+  }
+}

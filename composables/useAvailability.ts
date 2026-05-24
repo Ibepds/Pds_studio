@@ -65,10 +65,7 @@ function intersectRange(
   return { start: fromMinutes(start), end: fromMinutes(end) }
 }
 
-/** True if the given slot overlaps with any of the slots (for ingé confirmation) */
-export function slotOverlapsAny(slot: TimeSlot, slots: TimeSlot[]): boolean {
-  return slots.some((s) => intersectRange(slot, s) !== null)
-}
+export { slotOverlapsAny } from '../utils/timeSlots'
 
 /** Intersect multiple lists of slots; returns slots where all have availability */
 export function intersectSlots(slotsPerUser: TimeSlot[][]): TimeSlot[] {

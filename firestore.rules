@@ -1,34 +1,127 @@
 rules_version = '2';
-// Exemple de règles pour les codes d’invitation ingé.
-// À fusionner avec vos règles Firestore existantes (sessions, availability, etc.).
+// Règles PDS Studio — à fusionner dans votre fichier Firebase principal
+// (conservez ibe_apps / ComptaIBE et le catch-all existants).
 service cloud.firestore {
   match /databases/{database}/documents {
+
     function isSignedIn() {
       return request.auth != null;
     }
 
-    function userDoc() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function userRole() {
+      return getUserData().role;
     }
 
     function isAdmin() {
-      return isSignedIn() &&
-        (userDoc().data.role == 'admin' || userDoc().data.admin == true);
+      return isSignedIn() && (
+        getUserData().get('admin', false) == true ||
+        userRole() == 'admin'
+      );
     }
 
+    function isInge() {
+      return isSignedIn() && userRole() == 'inge';
+    }
+
+    function isBeatmaker() {
+      return isSignedIn() && userRole() == 'beatmaker';
+    }
+
+    function isBooker() {
+      return isSignedIn() && userRole() == 'booker';
+    }
+
+    function isReviewer() {
+      return isSignedIn() && userRole() == 'reviewer';
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    /** Lecture publique limitée : dispos ingé/beatmaker pour le calendrier de réservation invité */
+    function isPublicProProfile() {
+      return resource.data.role in ['inge', 'beatmaker'];
+    }
+
+    /** Créneaux déjà pris : date + horaires (sans auth, pour exclure les heures occupées) */
+    function isPublicSessionSlotRead() {
+      return resource.data.status in ['waiting_payment', 'pending', 'confirmed'];
+    }
+
+    function isPaypalDepositUpdate() {
+      return resource.data.status == 'waiting_payment'
+        && request.resource.data.status == 'pending'
+        && request.resource.data.paypalOrderId is string
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'paypalOrderId']);
+    }
+
+    // ─── USERS (remplacer le bloc match /users dans votre fichier) ───
     match /users/{userId} {
-      allow read: if isSignedIn();
-      allow create: if isSignedIn() && request.auth.uid == userId;
-      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if isSignedIn()
+        || isPublicProProfile();
+
+      allow create: if isOwner(userId)
+        && request.resource.data.keys().hasAll(['email', 'role', 'createdAt'])
+        && request.resource.data.role in ['booker', 'inge', 'beatmaker']
+        && request.resource.data.get('admin', false) == false;
+
+      allow update: if isOwner(userId)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.get('admin', false) == resource.data.get('admin', false)
+        || isAdmin();
+
       allow delete: if isAdmin();
     }
 
-    match /ingeInvites/{code} {
-      allow create: if isAdmin();
-      allow get: if true;
-      allow list: if false;
-      allow delete: if isSignedIn();
-      allow update: if false;
+    // ─── SESSIONS (remplacer le bloc match /sessions) ───
+    match /sessions/{sessionId} {
+      allow read: if isAdmin()
+        || (isSignedIn() && resource.data.bookerId == request.auth.uid)
+        || isInge()
+        || isBeatmaker()
+        || isBooker()
+        || isReviewer()
+        || resource.data.status == 'waiting_payment'
+        || isPublicSessionSlotRead();
+
+      allow create: if request.resource.data.keys().hasAll(['bookerId', 'bookerEmail', 'date', 'startTime', 'endTime', 'status', 'createdAt'])
+        && request.resource.data.status == 'waiting_payment';
+
+      allow update: if isAdmin()
+        || (isSignedIn() && resource.data.bookerId == request.auth.uid
+            && request.resource.data.status in ['pending', 'cancelled']
+            && request.resource.data.bookerId == resource.data.bookerId
+            && request.resource.data.date == resource.data.date)
+        || (isInge() && resource.data.ingeId == request.auth.uid
+            && request.resource.data.status in ['confirmed', 'done', 'cancelled']
+            && request.resource.data.bookerId == resource.data.bookerId)
+        || isPaypalDepositUpdate();
+
+      allow delete: if isAdmin();
+    }
+
+    // ─── AVAILABILITY (remplacer le bloc match /availability) ───
+    match /availability/{docId} {
+      // Lecture publique : nécessaire pour afficher les créneaux libres sans compte
+      allow read: if true;
+
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.role in ['inge', 'beatmaker']
+        && request.resource.data.keys().hasAll(['userId', 'date', 'role', 'slots']);
+
+      allow update: if isSignedIn()
+        && resource.data.userId == request.auth.uid
+        && request.resource.data.userId == resource.data.userId
+        || isAdmin();
+
+      allow delete: if (isSignedIn() && resource.data.userId == request.auth.uid)
+        || isAdmin();
     }
   }
 }

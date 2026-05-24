@@ -315,7 +315,7 @@ export const useSessions = () => {
         data.push(
           parseSessionDoc(d.id, {
             ...d.data(),
-            status: (d.data() as any).status ?? 'pending',
+            status: (d.data() as { status?: SessionStatus }).status,
           } as Record<string, unknown>),
         )
       })
@@ -352,7 +352,7 @@ export const useSessions = () => {
         data.push(
           parseSessionDoc(d.id, {
             ...d.data(),
-            status: (d.data() as any).status ?? 'pending',
+            status: (d.data() as { status?: SessionStatus }).status,
           } as Record<string, unknown>),
         )
       })
@@ -374,12 +374,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      data.push(
-        parseSessionDoc(d.id, {
-          ...d.data(),
-          status: (d.data() as any).status ?? 'pending',
-        } as Record<string, unknown>),
-      )
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
     })
     data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     return data
@@ -401,12 +396,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      data.push(
-        parseSessionDoc(d.id, {
-          ...d.data(),
-          status: (d.data() as any).status ?? 'pending',
-        } as Record<string, unknown>),
-      )
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
     })
     data.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))
     return data
@@ -422,12 +412,7 @@ export const useSessions = () => {
     const snap = await getDocs(q)
     const data: Session[] = []
     snap.forEach((d) => {
-      data.push(
-        parseSessionDoc(d.id, {
-          ...d.data(),
-          status: (d.data() as any).status ?? 'pending',
-        } as Record<string, unknown>),
-      )
+      data.push(parseSessionDoc(d.id, d.data() as Record<string, unknown>))
     })
     const pending = data.filter((s) => s.status === 'pending')
     pending.sort((a, b) => a.date.localeCompare(b.date) || a.startTime.localeCompare(b.startTime))

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { nextTick, onBeforeUnmount, ref } from 'vue'
 import { navigateTo } from '#app'
 import { useSessions, type Session } from '../../composables/useSessions'
-import { usePaypal } from '../../composables/usePaypal'
+import { usePaypalCheckout } from '../../composables/usePaypalCheckout'
 
 const activeTab = ref<'reserver' | 'payer'>('reserver')
 
@@ -11,8 +11,12 @@ const searchResults = ref<Session[]>([])
 const loadingSearch = ref(false)
 const searchError = ref<string | null>(null)
 
-const paypalError = ref<string | null>(null)
-const paypalRenderedFor = ref<string | null>(null)
+const { paypalError, paypalLoading, depositForSession, renderPaypalButton, destroyPaypalButton } =
+  usePaypalCheckout()
+
+const guestPaymentOpen = ref(false)
+const guestPaymentSessionId = ref<string | null>(null)
+const guestPaymentDeposit = ref(0)
 
 type PaymentResult = 'success' | 'error'
 const paymentResult = ref<PaymentResult | null>(null)
@@ -42,17 +46,15 @@ function showPaymentResult(result: PaymentResult) {
 
 onBeforeUnmount(() => {
   clearPaymentResultTimer()
+  void destroyPaypalButton()
 })
 
-const { findUnpaidByReservationName, updateSessionStatus } = useSessions()
-
-const depositForSession = (s: Session) =>
-  s.depositAmount ?? Math.round((s.totalPrice ?? 50) * 0.3)
+const { findUnpaidByReservationName } = useSessions()
 
 const searchReservations = async () => {
   searchError.value = null
-  paypalError.value = null
-  paypalRenderedFor.value = null
+  guestPaymentOpen.value = false
+  await destroyPaypalButton()
   loadingSearch.value = true
   searchResults.value = []
   const name = reservationSearch.value.trim()
@@ -69,54 +71,42 @@ const searchReservations = async () => {
     } else {
       searchResults.value = sessions
     }
-  } catch (e: any) {
-    searchError.value = e?.message ?? 'Erreur lors de la recherche de la réservation.'
+  } catch (e: unknown) {
+    searchError.value = e instanceof Error ? e.message : 'Erreur lors de la recherche de la réservation.'
   } finally {
     loadingSearch.value = false
   }
 }
 
-const initPaypalGuest = async (sessionId: string, deposit: number) => {
-  paypalError.value = null
-  try {
-    const loadPaypalFn = usePaypal()
-    const paypal = await loadPaypalFn()
-    if (!paypal) throw new Error('PayPal non disponible')
-    if (paypalRenderedFor.value === sessionId) return
-    const valueApi = (typeof deposit === 'number' ? deposit : 50).toFixed(2)
-    paypal
-      .Buttons({
-        fundingSource: paypal?.FUNDING?.PAYPAL ?? undefined,
-        disableFunding: 'card',
-        createOrder: (_data: any, actions: any) =>
-          actions.order.create({
-            purchase_units: [
-              {
-                amount: { value: valueApi, currency_code: 'EUR' },
-                description: 'Acompte 30% — réservation session studio PDS',
-              },
-            ],
-          }),
-        onApprove: async (data: any, actions: any) => {
-          await actions.order.capture()
-          const orderId = data?.orderID
-          try {
-            await updateSessionStatus(sessionId, 'pending', orderId)
-          } catch (e) {
-            console.error(e)
-          }
-          showPaymentResult('success')
-        },
-        onError: () => {
-          paypalError.value = 'Erreur lors du paiement PayPal.'
-          showPaymentResult('error')
-        },
-      })
-      .render(`#paypal-button-guest-${sessionId}`)
-    paypalRenderedFor.value = sessionId
-  } catch (e: any) {
-    paypalError.value = e?.message ?? 'Impossible de charger PayPal.'
-  }
+const openGuestPayment = async (s: Session) => {
+  guestPaymentSessionId.value = s.id
+  guestPaymentDeposit.value = depositForSession(s)
+  guestPaymentOpen.value = true
+  await destroyPaypalButton()
+  await nextTick()
+  await renderPaypalButton({
+    containerId: 'paypal-button-guest-modal',
+    sessionId: s.id,
+    depositEur: guestPaymentDeposit.value,
+    force: true,
+    onSuccess: async () => {
+      searchResults.value = searchResults.value.filter((row) => row.id !== s.id)
+      guestPaymentOpen.value = false
+      guestPaymentSessionId.value = null
+      showPaymentResult('success')
+    },
+    onError: () => {
+      guestPaymentOpen.value = false
+      guestPaymentSessionId.value = null
+      showPaymentResult('error')
+    },
+  })
+}
+
+const closeGuestPayment = async () => {
+  guestPaymentOpen.value = false
+  guestPaymentSessionId.value = null
+  await destroyPaypalButton()
 }
 </script>
 
@@ -169,6 +159,35 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
           @click="goHomeNow"
         >
           Retour à l'accueil
+        </button>
+      </div>
+    </div>
+
+    <!-- Modal paiement invité -->
+    <div
+      v-if="guestPaymentOpen && guestPaymentSessionId"
+      class="fixed left-0 right-0 bottom-0 top-[3.25rem] sm:top-[4.25rem] z-[90] flex items-center justify-center"
+      role="dialog"
+      aria-modal="true"
+      aria-label="Paiement PayPal"
+    >
+      <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" @click="closeGuestPayment" />
+      <div class="relative z-10 w-full max-w-md rounded-2xl border border-white/15 bg-[#111] p-6 shadow-xl mx-4">
+        <h3 class="mb-2 text-center font-[Raleway,sans-serif] text-xl font-bold text-white">
+          Paiement PayPal
+        </h3>
+        <p class="mb-4 text-center text-sm text-white/60">
+          Acompte : <strong class="text-white">{{ guestPaymentDeposit }}€</strong>
+        </p>
+        <p v-if="paypalLoading" class="mb-3 text-center text-sm text-white/50">Chargement PayPal…</p>
+        <div id="paypal-button-guest-modal" class="min-h-[45px]" />
+        <p v-if="paypalError" class="mt-3 text-center text-sm text-red-400">{{ paypalError }}</p>
+        <button
+          type="button"
+          class="mt-4 w-full rounded-full border border-white/30 px-4 py-2 text-sm text-white/80 hover:bg-white/10"
+          @click="closeGuestPayment"
+        >
+          Annuler
         </button>
       </div>
     </div>
@@ -226,7 +245,8 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
               Payer sans compte
             </h2>
             <p class="mt-3 text-sm text-[var(--pds-muted2)] sm:text-base">
-              Indique le <strong>nom de ta réservation</strong> tel que saisi lors de la réservation.
+              Indique le <strong>nom de ta réservation</strong> exactement comme lors de la réservation (champ
+              « Nom de la réservation » à l’étape informations artiste).
             </p>
           </div>
 
@@ -241,6 +261,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
                 autocomplete="off"
                 class="h-[49px] w-full min-w-0 rounded-full border border-white/50 bg-[#0f0f0f] px-5 font-[Raleway,sans-serif] text-lg font-medium text-white outline-none placeholder:text-white/25 focus:border-white/70"
                 placeholder="Ex. Session EP, Mix single…"
+                @keydown.enter="searchReservations"
               />
             </div>
             <button
@@ -316,13 +337,13 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
                       <button
                         type="button"
                         class="w-full rounded-full border border-white/50 bg-transparent px-8 py-3 font-[Raleway,sans-serif] text-lg font-medium text-white transition hover:bg-white/10 disabled:opacity-40"
-                        @click="initPaypalGuest(s.id, depositForSession(s))"
+                        :disabled="paypalLoading"
+                        @click="openGuestPayment(s)"
                       >
-                        Confirmer et payer
+                        {{ paypalLoading ? 'Chargement…' : 'Confirmer et payer' }}
                       </button>
-                      <div :id="`paypal-button-guest-${s.id}`" class="mt-3" />
                       <p class="mt-2 text-xs text-white/60">
-                        Paiement avec PayPal (acompte).
+                        Paiement sécurisé avec PayPal (acompte).
                       </p>
                     </div>
                   </div>
@@ -330,7 +351,7 @@ const initPaypalGuest = async (sessionId: string, deposit: number) => {
               </div>
             </div>
 
-            <p v-if="paypalError" class="mt-1 text-sm text-red-400">
+            <p v-if="paypalError && !guestPaymentOpen" class="mt-1 text-sm text-red-400">
               {{ paypalError }}
             </p>
           </div>

@@ -44,8 +44,13 @@ export default defineNuxtConfig({
     twilioAccountSid: process.env.TWILIO_ACCOUNT_SID || '',
     twilioAuthToken: process.env.TWILIO_AUTH_TOKEN || '',
     twilioFromPhone: process.env.TWILIO_FROM_PHONE || '',
+    twilioServiceSid: process.env.TWILIO_SERVICE_SID || '',
     adminEmail: process.env.ADMIN_EMAIL || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_EMAIL || '',
     adminPhone: process.env.ADMIN_PHONE || process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',
+    /** Secret PayPal (capture serveur) — ne jamais exposer côté client */
+    paypalClientSecret: process.env.PAYPAL_CLIENT_SECRET || '',
+    /** sandbox | live (défaut sandbox) */
+    paypalMode: process.env.PAYPAL_MODE || 'sandbox',
     /** Google Calendar (Service Account) : chemin vers le JSON de clé OU email + clé privée */
     googleApplicationCredentials: process.env.GOOGLE_APPLICATION_CREDENTIALS || '',
     googleServiceAccountEmail: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL || '',
