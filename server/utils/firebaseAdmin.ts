@@ -1,7 +1,11 @@
-import { readFileSync } from 'node:fs'
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { depositForSession } from '../../utils/sessionDeposit'
+import { findEnvFilePath, readEnvFileVar } from './loadEnvFile'
+import {
+  isValidServiceAccountJson,
+  resolveServiceAccountCredentials,
+} from './googleServiceAccount'
 
 export interface SessionRecord {
   id: string
@@ -32,52 +36,93 @@ function parseFirestoreDate(value: unknown): Date | null {
 
 let adminApp: App | null = null
 
-function getServiceAccountCredentials(config: ReturnType<typeof useRuntimeConfig>): {
-  projectId: string
-  clientEmail: string
-  privateKey: string
-} | null {
-  const projectId = (config.public.firebaseProjectId as string)?.trim()
-  const keyFile = (config.googleApplicationCredentials as string)?.trim()
-  const email = (config.googleServiceAccountEmail as string)?.trim()
-  const privateKeyRaw = (config.googleServiceAccountPrivateKey as string)?.trim()
+function envVar(key: string, configValue: string | undefined): string {
+  const fromProcess = process.env[key]?.trim()
+  if (fromProcess) return fromProcess
+  const fromFile = readEnvFileVar(key)?.trim()
+  if (fromFile) return fromFile
+  return configValue?.trim() || ''
+}
 
+/** JSON trop long pour runtimeConfig Nuxt : priorité process.env / .env, puis config si JSON valide. */
+function resolveServiceAccountJson(config: ReturnType<typeof useRuntimeConfig>): string {
+  const candidates: Array<{ source: string; value: string | undefined }> = [
+    { source: 'process.GOOGLE_SERVICE_ACCOUNT_JSON', value: process.env.GOOGLE_SERVICE_ACCOUNT_JSON },
+    { source: 'process.NUXT_GOOGLE_SERVICE_ACCOUNT_JSON', value: process.env.NUXT_GOOGLE_SERVICE_ACCOUNT_JSON },
+    { source: 'file.GOOGLE_SERVICE_ACCOUNT_JSON', value: readEnvFileVar('GOOGLE_SERVICE_ACCOUNT_JSON') },
+    { source: 'runtimeConfig', value: config.googleServiceAccountJson as string },
+    { source: 'process.GOOGLE_SERVICE_ACCOUNT_EMAIL', value: process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL },
+    { source: 'file.GOOGLE_SERVICE_ACCOUNT_EMAIL', value: readEnvFileVar('GOOGLE_SERVICE_ACCOUNT_EMAIL') },
+  ]
+
+  for (const { value } of candidates) {
+    const trimmed = value?.trim()
+    if (trimmed && isValidServiceAccountJson(trimmed)) return trimmed
+  }
+
+  return ''
+}
+
+function getServiceAccountCredentials(config: ReturnType<typeof useRuntimeConfig>) {
+  const projectId =
+    (config.public.firebaseProjectId as string)?.trim() ||
+    envVar('NUXT_PUBLIC_FIREBASE_PROJECT_ID', undefined)
   if (!projectId) return null
 
-  if (email && privateKeyRaw) {
-    return {
-      projectId,
-      clientEmail: email,
-      privateKey: privateKeyRaw.replace(/\\n/g, '\n'),
-    }
-  }
+  const jsonInline = resolveServiceAccountJson(config)
 
-  if (keyFile) {
-    try {
-      const json = JSON.parse(readFileSync(keyFile, 'utf8')) as {
-        project_id?: string
-        client_email?: string
-        private_key?: string
-      }
-      if (json.client_email && json.private_key) {
-        return {
-          projectId: json.project_id || projectId,
-          clientEmail: json.client_email,
-          privateKey: json.private_key,
-        }
-      }
-    } catch {
-      return null
-    }
-  }
+  return resolveServiceAccountCredentials({
+    projectId,
+    jsonInline,
+    keyFile: envVar('GOOGLE_APPLICATION_CREDENTIALS', config.googleApplicationCredentials as string),
+    email:
+      envVar('GOOGLE_SERVICE_ACCOUNT_EMAIL', config.googleServiceAccountEmail as string) ||
+      envVar('NUXT_GOOGLE_SERVICE_ACCOUNT_EMAIL', undefined),
+    privateKeyRaw:
+      envVar('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY', config.googleServiceAccountPrivateKey as string) ||
+      envVar('NUXT_GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY', undefined),
+  })
+}
 
-  return null
+function rethrowFirestoreAuthError(error: unknown): never {
+  const msg = error instanceof Error ? error.message : String(error)
+  const code = (error as { code?: number })?.code
+  if (
+    code === 16 ||
+    msg.includes('UNAUTHENTICATED') ||
+    msg.includes('invalid_grant') ||
+    msg.includes('Invalid JWT')
+  ) {
+    throw createError({
+      statusCode: 503,
+      message:
+        'Firebase Admin : clé de compte de service invalide (email / clé privée ne correspondent pas, ou clé révoquée). ' +
+        'Télécharge une nouvelle clé dans Firebase → Paramètres du projet → Comptes de service → « Générer une nouvelle clé privée », ' +
+        'puis définis GOOGLE_APPLICATION_CREDENTIALS=chemin/vers/le-fichier.json (recommandé sous Windows) ou mets à jour GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.',
+    })
+  }
+  throw error
 }
 
 export function getFirebaseAdminFirestore(): Firestore | null {
   const config = useRuntimeConfig()
   const creds = getServiceAccountCredentials(config)
-  if (!creds) return null
+  if (!creds) {
+    const runtimeJson = (config.googleServiceAccountJson as string)?.trim() || ''
+    const processJson = process.env.GOOGLE_SERVICE_ACCOUNT_JSON?.trim() || ''
+    const fileJson = readEnvFileVar('GOOGLE_SERVICE_ACCOUNT_JSON')?.trim() || ''
+    console.error('[Firebase Admin] identifiants introuvables', {
+      cwd: process.cwd(),
+      envFile: findEnvFilePath(),
+      runtimeJsonLen: runtimeJson.length,
+      runtimeJsonValid: isValidServiceAccountJson(runtimeJson),
+      processJsonLen: processJson.length,
+      processJsonValid: isValidServiceAccountJson(processJson),
+      fileJsonLen: fileJson.length,
+      fileJsonValid: isValidServiceAccountJson(fileJson),
+    })
+    return null
+  }
 
   if (!adminApp) {
     const existing = getApps()[0]
@@ -102,11 +147,16 @@ export async function getSessionRecord(sessionId: string): Promise<SessionRecord
     throw createError({
       statusCode: 503,
       message:
-        'Firebase Admin non configuré (GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY).',
+        'Firebase Admin non configuré : GOOGLE_SERVICE_ACCOUNT_JSON (recommandé Netlify), GOOGLE_APPLICATION_CREDENTIALS, ou GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.',
     })
   }
 
-  const snap = await db.collection('sessions').doc(sessionId).get()
+  let snap
+  try {
+    snap = await db.collection('sessions').doc(sessionId).get()
+  } catch (e) {
+    rethrowFirestoreAuthError(e)
+  }
   if (!snap.exists) return null
 
   const data = snap.data() as Record<string, unknown>

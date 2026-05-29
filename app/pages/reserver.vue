@@ -11,12 +11,13 @@ const searchResults = ref<Session[]>([])
 const loadingSearch = ref(false)
 const searchError = ref<string | null>(null)
 
-const { paypalError, paypalLoading, depositForSession, renderPaypalButton, destroyPaypalButton } =
+const { paypalError, paypalLoading, depositForSession, startPaypalCheckout, destroyPaypalButton } =
   usePaypalCheckout()
 
 const guestPaymentOpen = ref(false)
 const guestPaymentSessionId = ref<string | null>(null)
 const guestPaymentDeposit = ref(0)
+const guestPaymentSession = ref<Session | null>(null)
 
 type PaymentResult = 'success' | 'error'
 const paymentResult = ref<PaymentResult | null>(null)
@@ -79,15 +80,16 @@ const searchReservations = async () => {
 }
 
 const openGuestPayment = async (s: Session) => {
+  guestPaymentSession.value = s
   guestPaymentSessionId.value = s.id
   guestPaymentDeposit.value = depositForSession(s)
   guestPaymentOpen.value = true
   await destroyPaypalButton()
   await nextTick()
-  await renderPaypalButton({
-    containerId: 'paypal-button-guest-modal',
+  await startPaypalCheckout({
     sessionId: s.id,
     depositEur: guestPaymentDeposit.value,
+    autoStart: true,
     force: true,
     onSuccess: async () => {
       searchResults.value = searchResults.value.filter((row) => row.id !== s.id)
@@ -95,10 +97,15 @@ const openGuestPayment = async (s: Session) => {
       guestPaymentSessionId.value = null
       showPaymentResult('success')
     },
-    onError: () => {
+    onError: (msg) => {
+      console.error('[PDS PayPal] reserver onError → écran échec', msg)
       guestPaymentOpen.value = false
       guestPaymentSessionId.value = null
       showPaymentResult('error')
+    },
+    onCancel: () => {
+      guestPaymentOpen.value = false
+      guestPaymentSessionId.value = null
     },
   })
 }
@@ -106,7 +113,14 @@ const openGuestPayment = async (s: Session) => {
 const closeGuestPayment = async () => {
   guestPaymentOpen.value = false
   guestPaymentSessionId.value = null
+  guestPaymentSession.value = null
   await destroyPaypalButton()
+}
+
+const retryGuestPayment = async () => {
+  const s = guestPaymentSession.value
+  if (!s) return
+  await openGuestPayment(s)
 }
 </script>
 
@@ -179,9 +193,22 @@ const closeGuestPayment = async () => {
         <p class="mb-4 text-center text-sm text-white/60">
           Acompte : <strong class="text-white">{{ guestPaymentDeposit }}€</strong>
         </p>
-        <p v-if="paypalLoading" class="mb-3 text-center text-sm text-white/50">Chargement PayPal…</p>
-        <div id="paypal-button-guest-modal" class="min-h-[45px]" />
+        <p class="mb-3 text-center text-sm text-white/60">
+          {{
+            paypalLoading
+              ? 'Ouverture de PayPal…'
+              : 'La fenêtre PayPal devrait s’ouvrir. Autorise les pop-ups si besoin.'
+          }}
+        </p>
         <p v-if="paypalError" class="mt-3 text-center text-sm text-red-400">{{ paypalError }}</p>
+        <button
+          v-if="paypalError && guestPaymentSessionId"
+          type="button"
+          class="mt-3 w-full rounded-full border border-white/30 px-4 py-2 text-sm text-white/90 hover:bg-white/10"
+          @click="retryGuestPayment"
+        >
+          Réessayer PayPal
+        </button>
         <button
           type="button"
           class="mt-4 w-full rounded-full border border-white/30 px-4 py-2 text-sm text-white/80 hover:bg-white/10"

@@ -88,7 +88,7 @@ const occupiedHoursByDate = ref<Record<string, number[]>>({})
 const availableStartHoursList = ref<number[]>([])
 const loadingSlots = ref(false)
 
-const { paypalError, paypalLoading, depositForSession, renderPaypalButton, destroyPaypalButton } =
+const { paypalError, paypalLoading, depositForSession, startPaypalCheckout, destroyPaypalButton } =
   usePaypalCheckout()
 
 /** Overlay pendant le lancement PayPal (étape "Confirmer et payer"). */
@@ -538,10 +538,10 @@ const handleBook = async () => {
 
 const initPaypalBooking = async (sessionId: string, deposit: number) => {
   success.value = null
-  await renderPaypalButton({
-    containerId: `paypal-button-${sessionId}`,
+  await startPaypalCheckout({
     sessionId,
     depositEur: deposit,
+    autoStart: true,
     force: true,
     onSuccess: async () => {
       success.value = 'Paiement PayPal effectué, en attente de confirmation ingé.'
@@ -550,10 +550,15 @@ const initPaypalBooking = async (sessionId: string, deposit: number) => {
       await listForCurrentBooker()
       showPaymentResult('success')
     },
-    onError: () => {
+    onError: (msg) => {
+      console.error('[PDS PayPal] booker onError → écran échec', msg)
       paymentModalOpen.value = false
       paymentModalSessionId.value = null
       showPaymentResult('error')
+    },
+    onCancel: () => {
+      paymentModalOpen.value = false
+      paymentModalSessionId.value = null
     },
   })
 }
@@ -823,12 +828,23 @@ function restToPayForSession(s: any): number {
           >
             PAIEMENT EN COURS...
           </h2>
-          <div class="relative z-10 mt-10 w-full sm:mt-14">
-            <div class="pointer-events-auto mx-auto w-fit min-w-[200px]">
-              <p v-if="paypalLoading" class="mb-3 text-center text-sm text-white/60">Chargement PayPal…</p>
-              <div :id="`paypal-button-${paymentModalSessionId}`" class="min-h-[45px]" />
-              <p v-if="paypalError" class="mt-3 max-w-sm text-center text-sm text-red-400">{{ paypalError }}</p>
-            </div>
+          <div class="relative z-10 mt-10 w-full max-w-md px-4 sm:mt-14">
+            <p class="text-center text-sm text-white/70">
+              {{
+                paypalLoading
+                  ? 'Ouverture de PayPal…'
+                  : 'Si la fenêtre PayPal ne s’ouvre pas, autorise les pop-ups pour ce site.'
+              }}
+            </p>
+            <p v-if="paypalError" class="mt-4 text-center text-sm text-red-400">{{ paypalError }}</p>
+            <button
+              v-if="paypalError && paymentModalSessionId"
+              type="button"
+              class="mt-4 w-full rounded-full border border-white/40 px-4 py-2 text-sm text-white hover:bg-white/10"
+              @click="initPaypalBooking(paymentModalSessionId, depositAmount)"
+            >
+              Réessayer PayPal
+            </button>
           </div>
         </div>
 
@@ -1053,11 +1069,11 @@ function restToPayForSession(s: any): number {
                 <button
                   type="button"
                   class="btn-secondary !py-2 !px-3 !text-sm"
+                  :disabled="paypalLoading"
                   @click="initPaypalBooking(s.id, depositForSession(s))"
                 >
-                  Afficher PayPal
+                  {{ paypalLoading ? 'Ouverture…' : 'Payer avec PayPal' }}
                 </button>
-                <div :id="`paypal-button-${s.id}`" class="mt-2" />
                 <p v-if="paypalError" class="mt-1 text-xs text-red-400">
                   {{ paypalError }}
                 </p>

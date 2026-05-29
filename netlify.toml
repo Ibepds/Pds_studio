@@ -1,0 +1,12 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+  # Active les fonctions Netlify pour les routes API Nuxt (PayPal, Firebase Admin, emails…)
+  NITRO_PRESET = "netlify"
+
+[functions]
+  # PayPal + Firestore + envoi mail peuvent dépasser 10s en pic
+  node_bundler = "esbuild"

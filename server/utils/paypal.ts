@@ -63,6 +63,65 @@ export async function getPaypalAccessToken(
   return data.access_token
 }
 
+export interface PayPalCreateOrderResult {
+  orderId: string
+  status: string
+}
+
+/** Crée une commande PayPal (Orders v2) avant le flux SDK v6. */
+export async function createPaypalOrder(
+  sessionId: string,
+  depositEur: number,
+  accessToken: string,
+  mode: PayPalMode,
+): Promise<PayPalCreateOrderResult> {
+  const apiBase = getPaypalApiBase(mode)
+  const value = depositAmountToPaypalValue(depositEur)
+
+  const res = await fetch(`${apiBase}/v2/checkout/orders`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+      'PayPal-Request-Id': `pds-${sessionId}-${Date.now()}`,
+    },
+    body: JSON.stringify({
+      intent: 'CAPTURE',
+      purchase_units: [
+        {
+          custom_id: sessionId,
+          description: 'Acompte 30% — réservation session studio PDS',
+          amount: {
+            currency_code: 'EUR',
+            value,
+          },
+        },
+      ],
+    }),
+  })
+
+  const body = (await res.json()) as Record<string, unknown>
+
+  if (!res.ok) {
+    const details = JSON.stringify(body).slice(0, 800)
+    console.error('[PDS PayPal] createPaypalOrder API échec', { status: res.status, body: details })
+    throw createError({
+      statusCode: 502,
+      message: `Création commande PayPal échouée (${res.status}): ${details}`,
+    })
+  }
+
+  const orderId = String(body.id ?? '')
+  if (!orderId) {
+    throw createError({ statusCode: 502, message: 'Réponse PayPal invalide (order id manquant).' })
+  }
+
+  return {
+    orderId,
+    status: String(body.status ?? 'CREATED'),
+  }
+}
+
 export interface PayPalCaptureResult {
   id: string
   status: string
