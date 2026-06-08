@@ -52,7 +52,7 @@ export const useIngeInvites = () => {
 
   const createInvite = async (createdByUid: string): Promise<{ code: string; link: string }> => {
     const db = getDb()
-    if (!db) throw new Error('Firebase non initialisé')
+    if (!db) throw new Error('Application non prête. Rechargez la page.')
 
     loading.value = true
     error.value = null
@@ -90,7 +90,7 @@ export const useIngeInvites = () => {
   /** Réserve le code (suppression) avant création du compte — usage unique */
   const claimInviteCode = async (rawCode: string): Promise<void> => {
     const db = getDb()
-    if (!db) throw new Error('Firebase non initialisé')
+    if (!db) throw new Error('Application non prête. Rechargez la page.')
 
     const code = normalizeIngeInviteCode(rawCode)
     if (!code) throw new Error('Code d’invitation manquant')

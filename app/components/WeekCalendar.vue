@@ -21,7 +21,19 @@ const props = defineProps<{
   sessions: WeekCalendarSession[]
   startHour?: number
   endHour?: number
+  ingeList?: { uid: string; email?: string | null }[]
 }>()
+
+function resolveIngeName(ingeId: string | undefined): string {
+  if (!ingeId) return '—'
+  const found = props.ingeList?.find((u) => u.uid === ingeId)
+  return found?.email ?? ingeId
+}
+
+function resolveClientName(s: WeekCalendarSession): string {
+  if (s.reservationName && String(s.reservationName).trim()) return String(s.reservationName).trim()
+  return s.bookerEmail ?? s.bookerId ?? 'Client'
+}
 
 const startHour = computed(() => props.startHour ?? CALENDAR_START_HOUR)
 const endHour = computed(() => props.endHour ?? CALENDAR_END_HOUR)
@@ -240,11 +252,9 @@ function goToToday() {
             gridRow: `${sessionGridPlace(s).gridRowStart} / ${sessionGridPlace(s).gridRowEnd}`,
           }"
         >
-          <span class="font-medium">{{ s.startTime }} – {{ s.endTime }}</span>
-          <span class="truncate text-[9px] opacity-95">{{
-            s.bookerEmail ?? s.bookerId ?? '—'
-          }}</span>
-          <span v-if="s.style" class="truncate text-[9px] opacity-80">{{ s.style }}</span>
+          <span class="font-medium leading-tight">{{ s.startTime }} – {{ s.endTime }}</span>
+          <span class="truncate text-[9px] opacity-90">{{ resolveIngeName(s.ingeId) }}</span>
+          <span class="truncate text-[9px] opacity-80">{{ resolveClientName(s) }}</span>
         </div>
       </div>
     </div>

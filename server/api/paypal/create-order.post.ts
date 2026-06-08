@@ -4,12 +4,14 @@
 import {
   createPaypalOrder,
   getPaypalAccessToken,
-  resolvePaypalMode,
 } from '../../utils/paypal'
 import {
   expectedDepositForRecord,
   getSessionRecord,
 } from '../../utils/firebaseAdmin'
+import { getPaypalServerConfig, paypalConfigDiagnostics } from '../../utils/paypalConfig'
+import { firebaseAdminUserMessage } from '../../../utils/firestoreErrors'
+import { paypalUserMessage } from '../../../utils/paypalErrors'
 
 interface CreateOrderBody {
   sessionId?: string
@@ -17,22 +19,23 @@ interface CreateOrderBody {
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const clientId = (config.public.paypalClientId as string)?.trim()
-  const clientSecret = (config.paypalClientSecret as string)?.trim()
+  const { clientId, clientSecret, mode } = getPaypalServerConfig(config)
 
-  console.log('[PDS PayPal] create-order → début')
+  console.log('[PDS PayPal] create-order → début', paypalConfigDiagnostics(config))
 
   if (!clientId || !clientSecret) {
-    console.error('[PDS PayPal] create-order config manquante', {
-      hasClientId: !!clientId,
-      hasSecret: !!clientSecret,
-    })
-    const missing: string[] = []
-    if (!clientId) missing.push('NUXT_PUBLIC_PAYPAL_CLIENT_ID')
-    if (!clientSecret) missing.push('PAYPAL_CLIENT_SECRET')
+    console.error('[PDS PayPal] create-order config manquante', paypalConfigDiagnostics(config))
     throw createError({
       statusCode: 503,
-      message: `PayPal serveur non configuré : ajouter ${missing.join(' et ')} dans .env puis redémarrer \`npm run dev\`.`,
+      message: paypalUserMessage.notConfigured,
+    })
+  }
+
+  const publicMode = ((config.public.paypalMode as string) || '').trim().toLowerCase()
+  if (publicMode && publicMode !== mode) {
+    console.warn('[PDS PayPal] create-order mode client ≠ serveur', {
+      publicMode,
+      serverMode: mode,
     })
   }
 
@@ -47,7 +50,7 @@ export default defineEventHandler(async (event) => {
 
     const session = await getSessionRecord(sessionId)
     if (!session) {
-      throw createError({ statusCode: 404, message: 'Session introuvable.' })
+      throw createError({ statusCode: 404, message: firebaseAdminUserMessage.sessionNotFound })
     }
 
     console.log('[PDS PayPal] create-order session Firestore', {
@@ -60,15 +63,11 @@ export default defineEventHandler(async (event) => {
     if (session.status !== 'waiting_payment') {
       throw createError({
         statusCode: 409,
-        message: `Impossible de créer la commande : statut « ${session.status} ».`,
+        message: firebaseAdminUserMessage.sessionNotPayable(session.status),
       })
     }
 
     const expectedDeposit = expectedDepositForRecord(session)
-    const mode = resolvePaypalMode({
-      paypalMode: config.paypalMode as string,
-      paypalClientId: clientId,
-    })
 
     console.log('[PDS PayPal] create-order PayPal', { mode, expectedDeposit })
 

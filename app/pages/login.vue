@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useAuth } from '../../composables/useAuth'
+import { toFrenchFirebaseAuthError } from '../../utils/firestoreErrors'
 import { useRoute, useRouter } from 'vue-router'
 
 const route = useRoute()
@@ -48,12 +49,12 @@ const onSubmit = async () => {
     const r = currentUser.value?.role
     if (!r) {
       error.value =
-        'Profil utilisateur introuvable dans Firestore. Vérifie que users/{uid} contient role: "reviewer".'
+        'Profil introuvable. Votre compte existe mais n’a pas encore de rôle assigné. Contactez le studio.'
       return
     }
     await router.push(destinationForRole(r))
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Erreur de connexion'
+    error.value = toFrenchFirebaseAuthError(e)
   } finally {
     submitting.value = false
   }

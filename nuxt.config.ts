@@ -44,7 +44,7 @@ export default defineNuxtConfig({
       firebaseAppId: process.env.NUXT_PUBLIC_FIREBASE_APP_ID,
 
       paypalClientId: process.env.NUXT_PUBLIC_PAYPAL_CLIENT_ID,
-      paypalMode: process.env.PAYPAL_MODE || 'live',
+      paypalMode: process.env.PAYPAL_MODE || 'sandbox',
       /** Email et téléphone admin pour afficher dans le client (notifications) */
       adminNotifyEmail: process.env.NUXT_PUBLIC_ADMIN_NOTIFY_EMAIL || '',
       adminNotifyPhone: process.env.NUXT_PUBLIC_ADMIN_NOTIFY_PHONE || '',

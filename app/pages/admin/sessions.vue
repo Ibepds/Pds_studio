@@ -20,6 +20,7 @@ const {
   updateSessionRemainingToPay,
   updateSessionStatus,
   updateSessionRecapSent,
+  updateSessionInge,
 } = useSessions()
 const { listByRole } = useUsers()
 const { label, range, prevMonth, nextMonth, year, month } = useAdminMonthNav()
@@ -32,6 +33,9 @@ const markingPaidId = ref<string | null>(null)
 const confirmingId = ref<string | null>(null)
 const cancellingId = ref<string | null>(null)
 const expandedId = ref<string | null>(null)
+const changingIngeForId = ref<string | null>(null)
+const changeIngeUid = ref<Record<string, string>>({})
+const savingIngeId = ref<string | null>(null)
 
 /** Si pending sans ingéId : uid ingé choisi pour la confirmation */
 const assignIngeUid = ref<Record<string, string>>({})
@@ -215,6 +219,34 @@ function toggleInfo(id: string) {
   expandedId.value = expandedId.value === id ? null : id
 }
 
+function openChangeInge(s: Session) {
+  changingIngeForId.value = s.id
+  changeIngeUid.value[s.id] = s.ingeId ?? ingeList.value[0]?.uid ?? ''
+}
+
+function cancelChangeInge() {
+  changingIngeForId.value = null
+}
+
+async function saveChangeInge(s: Session) {
+  const newUid = changeIngeUid.value[s.id]
+  if (!newUid || newUid === s.ingeId) {
+    changingIngeForId.value = null
+    return
+  }
+  savingIngeId.value = s.id
+  adminError.value = null
+  try {
+    await updateSessionInge(s.id, newUid)
+    await loadMonth()
+    changingIngeForId.value = null
+  } catch (e: any) {
+    adminError.value = e?.message ?? 'Erreur lors du changement d\'ingé'
+  } finally {
+    savingIngeId.value = null
+  }
+}
+
 const sessionsByInge = computed(() => {
   const map: Record<string, { email: string; sessions: Session[] }> = {}
   for (const s of sessions.value) {
@@ -362,22 +394,72 @@ const sessionsByInge = computed(() => {
                     class="flex flex-wrap items-center gap-3"
                     :class="rowMuted(index) ? 'opacity-80' : ''"
                   >
-                    <span
-                      class="inline-flex h-[27px] items-center gap-1 rounded-full border border-white/50 px-[15px] py-1 font-['Raleway',sans-serif] text-[15px] font-medium text-white"
-                      :class="rowTextClass(rowMuted(index))"
-                    >
-                      <svg
-                        class="h-5 w-5 shrink-0"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        aria-hidden="true"
+                    <!-- Ingé : badge cliquable si ingé assigné, select inline si changement en cours -->
+                    <template v-if="changingIngeForId === s.id">
+                      <label class="sr-only" :for="'change-inge-' + s.id">Changer l'ingé</label>
+                      <select
+                        :id="'change-inge-' + s.id"
+                        v-model="changeIngeUid[s.id]"
+                        class="pds-sessions-ui max-w-[min(100%,240px)] rounded-lg border border-white/25 bg-black/50 px-2 py-1.5 text-xs text-white"
                       >
-                        <path
-                          d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"
-                        />
-                      </svg>
-                      Ingénieur son
-                    </span>
+                        <option v-for="u in ingeList" :key="u.uid" :value="u.uid">
+                          {{ u.email ?? u.uid }}
+                        </option>
+                      </select>
+                      <button
+                        type="button"
+                        class="pds-sessions-ui shrink-0 rounded-full bg-white/10 px-3 py-1 text-xs text-white transition hover:bg-white/20 disabled:opacity-50"
+                        :disabled="savingIngeId === s.id"
+                        @click="saveChangeInge(s)"
+                      >
+                        {{ savingIngeId === s.id ? '…' : 'Valider' }}
+                      </button>
+                      <button
+                        type="button"
+                        class="pds-sessions-ui text-xs text-white/50 transition hover:text-white/80"
+                        @click="cancelChangeInge"
+                      >
+                        Annuler
+                      </button>
+                    </template>
+                    <template v-else>
+                      <button
+                        v-if="s.ingeId && ingeList.length > 0"
+                        type="button"
+                        class="pds-sessions-ui inline-flex h-[27px] max-w-[200px] items-center gap-1.5 truncate rounded-full border border-white/50 px-[15px] py-1 font-['Raleway',sans-serif] text-[13px] font-medium transition hover:border-white/80 hover:bg-white/5"
+                        :class="rowTextClass(rowMuted(index))"
+                        :title="'Cliquer pour changer l\'ingé : ' + getIngeEmailForSession(s, ingeList)"
+                        @click="openChangeInge(s)"
+                      >
+                        <svg
+                          class="h-[14px] w-[14px] shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"
+                          />
+                        </svg>
+                        <span class="truncate">{{ getIngeEmailForSession(s, ingeList) }}</span>
+                      </button>
+                      <span
+                        v-else-if="!s.ingeId && !canConfirm(s)"
+                        class="inline-flex h-[27px] items-center gap-1 rounded-full border border-white/20 px-[15px] py-1 font-['Raleway',sans-serif] text-[13px] font-medium text-white/40"
+                      >
+                        <svg
+                          class="h-[14px] w-[14px] shrink-0"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                        >
+                          <path
+                            d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"
+                          />
+                        </svg>
+                        Pas d'ingé
+                      </span>
+                    </template>
 
                     <div
                       v-if="canConfirm(s) && !s.ingeId && ingeList.length > 0"

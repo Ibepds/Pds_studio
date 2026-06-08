@@ -15,6 +15,7 @@ import {
 import { useUsers } from '../../composables/useUsers'
 import { getAvailableStartHours } from '../../utils/pricing'
 import { DURATION_OPTIONS, getDeposit, getTotalPrice } from '../../utils/pricing'
+import { toFrenchFirestoreError } from '../../utils/firestoreErrors'
 
 /** 'reserver' = formulaire uniquement, 'mes-sessions' = liste + PayPal uniquement, 'all' = tout (défaut) */
 const props = withDefaults(
@@ -380,20 +381,7 @@ async function loadWeekData() {
     weekAvailabilityMap.value = {}
     occupiedHoursByDate.value = {}
     availableStartHoursList.value = []
-    const msg = e instanceof Error ? e.message : String(e)
-    const isPermission =
-      msg.includes('permission') ||
-      msg.includes('Permission') ||
-      msg.includes('insufficient permissions')
-    if (isPermission) {
-      localError.value =
-        'Impossible de charger les créneaux : les règles Firestore en production ne permettent pas la lecture sans connexion. Déployez les règles (users ingé, availability, sessions) — voir docs/firestore-rules-guest-slots.md'
-    } else if (msg.includes('index') || msg.includes('Index')) {
-      localError.value =
-        'Index Firestore manquant pour les sessions. Ouvre la console Firebase et crée l’index proposé dans l’erreur du navigateur (F12).'
-    } else if (msg) {
-      localError.value = `Impossible de charger les créneaux : ${msg}`
-    }
+    localError.value = toFrenchFirestoreError(e, 'slots')
   } finally {
     loadingSlots.value = false
   }

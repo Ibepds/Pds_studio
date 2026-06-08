@@ -1,7 +1,7 @@
 # Déploiement Netlify (PayPal + Firebase Admin)
 
 Sur Netlify, le site est statique **mais** les routes `/api/*` tournent en **fonctions serverless** (preset Nitro `netlify`).  
-PayPal et Firebase Admin fonctionnent donc **à condition de configurer les variables d’environnement** dans le dashboard Netlify (le fichier `.env` local n’est pas déployé).
+PayPal et Firebase Admin fonctionnent **à condition de configurer les variables d’environnement** dans le dashboard Netlify (le fichier `.env` local n’est pas déployé).
 
 ## 1. Build
 
@@ -33,63 +33,59 @@ Copier **toutes** les variables utiles depuis ton `.env` local, puis ajuster pou
 |----------|--------|--------|
 | `NUXT_PUBLIC_PAYPAL_CLIENT_ID` | All | Client ID (sandbox ou live) |
 | `PAYPAL_CLIENT_SECRET` | All | Secret REST — **jamais** `NUXT_PUBLIC_*` |
-| `PAYPAL_MODE` | All | `sandbox` ou `live` (aligné avec le client ID) |
+| `NUXT_PAYPAL_CLIENT_SECRET` | All | Recommandé sur Netlify (lu au runtime) |
+| `PAYPAL_MODE` | All | `sandbox` ou `live` — **doit correspondre** au Client ID |
 
-### Firebase Admin (serveur — **obligatoire pour create-order / capture-order**)
-
-**Recommandé sur Netlify** : une seule variable avec le JSON du compte de service (téléchargé depuis Firebase → Paramètres → Comptes de service → Générer une nouvelle clé privée).
+### Firebase Admin (serveur — obligatoire pour create-order / capture-order)
 
 | Variable | Valeur |
 |----------|--------|
-| `GOOGLE_SERVICE_ACCOUNT_JSON` | Coller le JSON **minifié sur une seule ligne** (sans retours à la ligne dans la clé `private_key` — le fichier téléchargé convient tel quel si tu le minifies) |
+| `GOOGLE_SERVICE_ACCOUNT_JSON` | JSON du compte de service Firebase, **minifié sur une ligne** |
 
-Exemple de forme (tronqué) :
+Alternatives : `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY`.
 
-```json
-{"type":"service_account","project_id":"studio-booking-804ff","private_key_id":"…","private_key":"-----BEGIN PRIVATE KEY-----\n…\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-xxx@studio-booking-804ff.iam.gserviceaccount.com",…}
-```
+### Notifications / Calendar (optionnel)
 
-**Ne pas** utiliser `GOOGLE_APPLICATION_CREDENTIALS=./secrets/…` sur Netlify : le fichier JSON n’est pas présent sur les fonctions serverless.
+`RESEND_API_KEY`, `TWILIO_*`, `ADMIN_EMAIL`, `GOOGLE_CALENDAR_ID`, etc.
 
-Alternatives (si tu préfères) :
+## 3. Erreur 502 sur `/api/paypal/create-order`
 
-- `GOOGLE_SERVICE_ACCOUNT_EMAIL` + `GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY` (clé avec `\n` dans la valeur)
-- Clé privée seule en base64 (sans en-tête PEM) : acceptée par le parseur
+Un **502** signifie presque toujours un échec de l’**API PayPal** (pas Firebase). Causes fréquentes :
 
-### Notifications (si utilisées)
+| Cause | Solution |
+|--------|----------|
+| `PAYPAL_MODE=live` avec un Client ID **sandbox** | Mettre `PAYPAL_MODE=sandbox` ou passer aux identifiants **Live** PayPal |
+| Secret absent au **runtime** Netlify | Ajouter `PAYPAL_CLIENT_SECRET` ou `NUXT_PAYPAL_CLIENT_SECRET` → **Production** → redéployer |
+| Secret d’une autre app PayPal | Recopier le secret depuis la **même** app que le Client ID |
+| App PayPal sans « Accept payments » | Activer **Accept Payments** sur l’app REST PayPal |
 
-`RESEND_API_KEY`, `TWILIO_*`, `ADMIN_EMAIL`, `ADMIN_PHONE`, `NUXT_PUBLIC_ADMIN_NOTIFY_*`, etc.
+### Logs Netlify (Functions)
 
-### Google Calendar (optionnel)
+- `[PDS PayPal] create-order → début` → vérifier `mode: "sandbox"` ou `"live"`
+- `[PDS PayPal] oauth2 token échec` → identifiants ou mode incorrect
+- `[PDS PayPal] create-order session Firestore` → Firebase OK, problème PayPal ensuite
 
-Même compte de service ou un autre ; `GOOGLE_CALENDAR_ID`.
+## 4. PayPal en production
 
-## 3. PayPal en production
+- Site public : app PayPal **Live**, `PAYPAL_MODE=live`, Client ID + secret Live sur Netlify.
+- Tests : `PAYPAL_MODE=sandbox` + identifiants sandbox.
 
-- Créer une app **Live** dans le dashboard PayPal si le site est public.
-- Mettre `PAYPAL_MODE=live` et les identifiants **live** sur Netlify.
-- Garder `sandbox` uniquement pour un site de preview / tests.
+## 5. Firestore
 
-## 4. Firestore
+Déployer les règles Firebase séparément (`firestore.rules`, `docs/firestore-rules-guest-slots.md`).
 
-Les règles Firestore doivent être déployées sur le projet Firebase (voir `firestore.rules` et `docs/firestore-rules-guest-slots.md`).  
-Le déploiement Netlify ne déploie **pas** les règles Firebase.
+## 6. Vérifier après déploiement
 
-## 5. Vérifier après déploiement
-
-1. Ouvrir le site Netlify → réserver → payer.
-2. Console navigateur : filtre `[PDS PayPal]` → `create-order ← réponse` avec `orderId`.
-3. Si erreur 503 Firebase : revoir `GOOGLE_SERVICE_ACCOUNT_JSON` (mauvais projet, JSON tronqué, ou clé révoquée).
-
-En local, tester les identifiants :
+1. Réserver → payer sur le site Netlify.
+2. Console navigateur : `[PDS PayPal] create-order ← réponse` avec `orderId`.
+3. Erreur 503 : revoir `GOOGLE_SERVICE_ACCOUNT_JSON`.
+4. Erreur 502 : revoir PayPal (section 3).
 
 ```bash
 node scripts/test-firebase-admin.mjs
 ```
 
-(Avec `GOOGLE_SERVICE_ACCOUNT_JSON` ou fichier dans `.env`.)
+## 7. Contextes Netlify
 
-## 6. Contextes Netlify (Production vs Deploy Preview)
-
-- **Production** : variables live (PayPal live, etc.).
-- **Deploy Preview** : dupliquer les variables ou utiliser un contexte `deploy-preview` avec `PAYPAL_MODE=sandbox`.
+- **Production** : variables live si site public.
+- **Deploy Preview** : sandbox recommandé.

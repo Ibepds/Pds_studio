@@ -1,6 +1,10 @@
 import { cert, getApps, initializeApp, type App } from 'firebase-admin/app'
 import { getFirestore, type Firestore } from 'firebase-admin/firestore'
 import { depositForSession } from '../../utils/sessionDeposit'
+import {
+  firebaseAdminUserMessage,
+  toFrenchFirebaseAdminError,
+} from '../../utils/firestoreErrors'
 import { findEnvFilePath, readEnvFileVar } from './loadEnvFile'
 import {
   isValidServiceAccountJson,
@@ -84,24 +88,11 @@ function getServiceAccountCredentials(config: ReturnType<typeof useRuntimeConfig
   })
 }
 
-function rethrowFirestoreAuthError(error: unknown): never {
-  const msg = error instanceof Error ? error.message : String(error)
-  const code = (error as { code?: number })?.code
-  if (
-    code === 16 ||
-    msg.includes('UNAUTHENTICATED') ||
-    msg.includes('invalid_grant') ||
-    msg.includes('Invalid JWT')
-  ) {
-    throw createError({
-      statusCode: 503,
-      message:
-        'Firebase Admin : clé de compte de service invalide (email / clé privée ne correspondent pas, ou clé révoquée). ' +
-        'Télécharge une nouvelle clé dans Firebase → Paramètres du projet → Comptes de service → « Générer une nouvelle clé privée », ' +
-        'puis définis GOOGLE_APPLICATION_CREDENTIALS=chemin/vers/le-fichier.json (recommandé sous Windows) ou mets à jour GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.',
-    })
-  }
-  throw error
+function rethrowFirestoreError(error: unknown): never {
+  throw createError({
+    statusCode: 503,
+    message: toFrenchFirebaseAdminError(error),
+  })
 }
 
 export function getFirebaseAdminFirestore(): Firestore | null {
@@ -146,8 +137,7 @@ export async function getSessionRecord(sessionId: string): Promise<SessionRecord
   if (!db) {
     throw createError({
       statusCode: 503,
-      message:
-        'Firebase Admin non configuré : GOOGLE_SERVICE_ACCOUNT_JSON (recommandé Netlify), GOOGLE_APPLICATION_CREDENTIALS, ou GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY.',
+      message: firebaseAdminUserMessage.notConfigured,
     })
   }
 
@@ -155,7 +145,7 @@ export async function getSessionRecord(sessionId: string): Promise<SessionRecord
   try {
     snap = await db.collection('sessions').doc(sessionId).get()
   } catch (e) {
-    rethrowFirestoreAuthError(e)
+    rethrowFirestoreError(e)
   }
   if (!snap.exists) return null
 
@@ -203,15 +193,19 @@ export async function markSessionPaidAfterPaypal(
   if (!db) {
     throw createError({
       statusCode: 503,
-      message:
-        'Firebase Admin non configuré (GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY ou GOOGLE_APPLICATION_CREDENTIALS).',
+      message: firebaseAdminUserMessage.notConfigured,
     })
   }
 
   const ref = db.collection('sessions').doc(sessionId)
-  const snap = await ref.get()
+  let snap
+  try {
+    snap = await ref.get()
+  } catch (e) {
+    rethrowFirestoreError(e)
+  }
   if (!snap.exists) {
-    throw createError({ statusCode: 404, message: 'Session introuvable.' })
+    throw createError({ statusCode: 404, message: firebaseAdminUserMessage.sessionNotFound })
   }
 
   const data = snap.data() as Record<string, unknown>
@@ -224,14 +218,18 @@ export async function markSessionPaidAfterPaypal(
   if (status !== 'waiting_payment') {
     throw createError({
       statusCode: 409,
-      message: `Cette session n’est pas en attente de paiement (statut: ${status}).`,
+      message: firebaseAdminUserMessage.sessionNotPayable(status),
     })
   }
 
-  await ref.update({
-    status: 'pending',
-    paypalOrderId,
-  })
+  try {
+    await ref.update({
+      status: 'pending',
+      paypalOrderId,
+    })
+  } catch (e) {
+    rethrowFirestoreError(e)
+  }
 }
 
 export function expectedDepositForRecord(session: SessionRecord): number {

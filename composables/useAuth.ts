@@ -9,6 +9,7 @@ import {
   sendEmailVerification,
 } from 'firebase/auth'
 import { doc, getDoc, setDoc, getFirestore } from 'firebase/firestore'
+import { toFrenchFirebaseAuthError } from '../utils/firestoreErrors'
 import { watch } from 'vue'
 import { normalizeIngeInviteCode, useIngeInvites } from './useIngeInvites'
 
@@ -179,7 +180,7 @@ export const useAuth = () => {
     fbEmail: string | null,
   ) => {
     const { db } = getClients()
-    if (!db) throw new Error('Firebase non initialisé côté client')
+    if (!db) throw new Error('Application non prête. Rechargez la page.')
 
     profileWriteLock.value = true
     try {
@@ -193,7 +194,7 @@ export const useAuth = () => {
       const profile = await readProfileFromFirestore(uid, 6)
       if (!profile || profile.role !== role) {
         throw new Error(
-          `Le rôle « ${role} » n’a pas pu être enregistré dans Firestore (lu : ${profile?.role ?? 'aucun document'}).`,
+          'Impossible d’enregistrer votre profil. Reconnectez-vous ou contactez le studio.',
         )
       }
 
@@ -214,7 +215,7 @@ export const useAuth = () => {
 
     try {
       if (!auth || !db) {
-        throw new Error('Firebase non initialisé côté client')
+        throw new Error('Application non prête. Rechargez la page.')
       }
 
       const cred = await createUserWithEmailAndPassword(auth, email, password)
@@ -250,7 +251,7 @@ export const useAuth = () => {
 
     try {
       if (!auth || !db) {
-        throw new Error('Firebase non initialisé côté client')
+        throw new Error('Application non prête. Rechargez la page.')
       }
 
       const valid = await isInviteValid(code)
@@ -286,7 +287,7 @@ export const useAuth = () => {
 
     try {
       if (!auth || !db) {
-        throw new Error('Firebase non initialisé côté client')
+        throw new Error('Application non prête. Rechargez la page.')
       }
       if (!code) {
         throw new Error('Code d’invitation manquant.')
@@ -317,7 +318,7 @@ export const useAuth = () => {
         throw e
       }
     } catch (e: any) {
-      error.value = e?.message ?? 'Erreur lors de la création du compte ingé'
+      error.value = toFrenchFirebaseAuthError(e)
       throw e
     } finally {
       loading.value = false
@@ -331,14 +332,14 @@ export const useAuth = () => {
 
     try {
       if (!auth) {
-        throw new Error('Firebase non initialisé côté client')
+        throw new Error('Application non prête. Rechargez la page.')
       }
 
       const cred = await signInWithEmailAndPassword(auth, email, password)
       await fetchUserProfile(cred.user)
       return cred
     } catch (e: any) {
-      error.value = e?.message ?? 'Erreur de connexion'
+      error.value = toFrenchFirebaseAuthError(e)
       throw e
     } finally {
       loading.value = false
@@ -352,13 +353,13 @@ export const useAuth = () => {
 
     try {
       if (!auth) {
-        throw new Error('Firebase non initialisé côté client')
+        throw new Error('Application non prête. Rechargez la page.')
       }
 
       await signOut(auth)
       authUser.value = null
     } catch (e: any) {
-      error.value = e?.message ?? 'Erreur lors de la déconnexion'
+      error.value = toFrenchFirebaseAuthError(e)
       throw e
     } finally {
       loading.value = false

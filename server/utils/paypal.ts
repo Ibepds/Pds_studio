@@ -1,4 +1,5 @@
 import { depositAmountToPaypalValue } from '../../utils/sessionDeposit'
+import { toFrenchPaypalApiError } from '../../utils/paypalErrors'
 
 export type PayPalMode = 'sandbox' | 'live'
 
@@ -43,15 +44,32 @@ export async function getPaypalAccessToken(
 
   if (!res.ok) {
     const text = await res.text()
+    console.error('[PDS PayPal] oauth2 token échec', {
+      mode,
+      status: res.status,
+      api: apiBase,
+      clientIdPrefix: `${clientId.slice(0, 12)}…`,
+      body: text.slice(0, 300),
+    })
+    if (res.status === 401 && text.toLowerCase().includes('invalid_client')) {
+      console.error(
+        mode === 'live'
+          ? '[PDS PayPal] LIVE invalid_client → vérifier : (1) Client ID Live + Secret Live de la MÊME app PayPal, (2) PAYPAL_MODE=live sur Netlify, (3) redéploiement après changement de NUXT_PUBLIC_PAYPAL_CLIENT_ID, (4) compte Business PayPal vérifié.'
+          : '[PDS PayPal] SANDBOX invalid_client → vérifier PAYPAL_CLIENT_SECRET et PAYPAL_MODE=sandbox (même app que le Client ID).',
+      )
+    }
     throw createError({
       statusCode: 502,
-      message: `PayPal authentification échouée (${res.status}): ${text.slice(0, 200)}`,
+      message: toFrenchPaypalApiError(res.status, text, mode, 'auth'),
     })
   }
 
   const data = (await res.json()) as { access_token?: string; expires_in?: number }
   if (!data.access_token) {
-    throw createError({ statusCode: 502, message: 'Réponse PayPal invalide (token manquant).' })
+    throw createError({
+      statusCode: 502,
+      message: toFrenchPaypalApiError(502, 'missing access_token', mode, 'auth'),
+    })
   }
 
   const expiresIn = (data.expires_in ?? 3600) * 1000
@@ -104,16 +122,19 @@ export async function createPaypalOrder(
 
   if (!res.ok) {
     const details = JSON.stringify(body).slice(0, 800)
-    console.error('[PDS PayPal] createPaypalOrder API échec', { status: res.status, body: details })
+    console.error('[PDS PayPal] createPaypalOrder API échec', { mode, status: res.status, body: details })
     throw createError({
       statusCode: 502,
-      message: `Création commande PayPal échouée (${res.status}): ${details}`,
+      message: toFrenchPaypalApiError(res.status, details, mode, 'create'),
     })
   }
 
   const orderId = String(body.id ?? '')
   if (!orderId) {
-    throw createError({ statusCode: 502, message: 'Réponse PayPal invalide (order id manquant).' })
+    throw createError({
+      statusCode: 502,
+      message: toFrenchPaypalApiError(502, 'missing order id', mode, 'create'),
+    })
   }
 
   return {
@@ -148,9 +169,10 @@ export async function capturePaypalOrder(
 
   if (!res.ok) {
     const details = JSON.stringify(body).slice(0, 400)
+    console.error('[PDS PayPal] capture API échec', { mode, status: res.status, body: details })
     throw createError({
       statusCode: 502,
-      message: `Capture PayPal échouée (${res.status}): ${details}`,
+      message: toFrenchPaypalApiError(res.status, details, mode, 'capture'),
     })
   }
 

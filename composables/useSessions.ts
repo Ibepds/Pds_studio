@@ -165,7 +165,7 @@ export const useSessions = () => {
     const q = query(
       col,
       where('date', '==', date),
-      where('status', 'in', ['waiting_payment', 'pending', 'confirmed']),
+      where('status', 'in', ['pending', 'confirmed']),
     )
     const snap = await getDocs(q)
     const data: Session[] = []
@@ -247,7 +247,7 @@ export const useSessions = () => {
   }) => {
     const db = getDb()
     const user = currentUser.value as AppUser | null
-    if (!db) throw new Error('Firestore non initialisé')
+    if (!db) throw new Error('Application non prête. Rechargez la page.')
 
     const contactEmail = (payload.contactEmail || user?.email || null) as string | null
     const bookerId = user?.uid || (contactEmail ? `guest:${contactEmail}` : `guest:${Date.now()}`)
@@ -453,6 +453,13 @@ export const useSessions = () => {
     })
   }
 
+  /** Met à jour l'ingé son assigné à une session (admin). L'appelant doit rafraîchir sa liste. */
+  const updateSessionInge = async (sessionId: string, ingeId: string) => {
+    const db = getDb()
+    if (!db) return
+    await updateDoc(doc(db, 'sessions', sessionId), { ingeId })
+  }
+
   /** Met à jour le reste à payer (0 = tout payé). Admin et ingé peuvent marquer la session comme entièrement payée. L'appelant doit rafraîchir sa liste. */
   const updateSessionRemainingToPay = async (sessionId: string, remainingToPay: number) => {
     const db = getDb()
@@ -528,6 +535,7 @@ export const useSessions = () => {
     bookSession,
     updateSessionStatus,
     updateSessionRecapSent,
+    updateSessionInge,
     updateSessionRemainingToPay,
     listPastSessions,
     saveSessionReview,

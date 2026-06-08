@@ -6,7 +6,6 @@ import {
   assertCapturedAmountMatches,
   capturePaypalOrder,
   getPaypalAccessToken,
-  resolvePaypalMode,
 } from '../../utils/paypal'
 import {
   expectedDepositForRecord,
@@ -14,6 +13,9 @@ import {
   markSessionPaidAfterPaypal,
 } from '../../utils/firebaseAdmin'
 import { sendPostPaymentNotifications } from '../../utils/postPaymentNotifications'
+import { getPaypalServerConfig, paypalConfigDiagnostics } from '../../utils/paypalConfig'
+import { firebaseAdminUserMessage } from '../../../utils/firestoreErrors'
+import { paypalUserMessage } from '../../../utils/paypalErrors'
 
 interface CaptureOrderBody {
   sessionId?: string
@@ -22,18 +24,14 @@ interface CaptureOrderBody {
 
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
-  const clientId = (config.public.paypalClientId as string)?.trim()
-  const clientSecret = (config.paypalClientSecret as string)?.trim()
+  const { clientId, clientSecret, mode } = getPaypalServerConfig(config)
 
-  console.log('[PDS PayPal] capture-order → début')
+  console.log('[PDS PayPal] capture-order → début', paypalConfigDiagnostics(config))
 
   if (!clientId || !clientSecret) {
-    const missing: string[] = []
-    if (!clientId) missing.push('NUXT_PUBLIC_PAYPAL_CLIENT_ID')
-    if (!clientSecret) missing.push('PAYPAL_CLIENT_SECRET')
     throw createError({
       statusCode: 503,
-      message: `PayPal serveur non configuré : ajouter ${missing.join(' et ')} dans .env puis redémarrer \`npm run dev\`.`,
+      message: paypalUserMessage.notConfigured,
     })
   }
 
@@ -53,7 +51,7 @@ export default defineEventHandler(async (event) => {
   try {
     const session = await getSessionRecord(sessionId)
     if (!session) {
-      throw createError({ statusCode: 404, message: 'Session introuvable.' })
+      throw createError({ statusCode: 404, message: firebaseAdminUserMessage.sessionNotFound })
     }
 
     console.log('[PDS PayPal] capture-order session', {
@@ -70,15 +68,11 @@ export default defineEventHandler(async (event) => {
     if (session.status !== 'waiting_payment') {
       throw createError({
         statusCode: 409,
-        message: `Paiement impossible : statut session « ${session.status} ».`,
+        message: firebaseAdminUserMessage.sessionNotPayable(session.status),
       })
     }
 
     const expectedDeposit = expectedDepositForRecord(session)
-    const mode = resolvePaypalMode({
-      paypalMode: config.paypalMode as string,
-      paypalClientId: clientId,
-    })
 
     console.log('[PDS PayPal] capture-order PayPal', { mode, expectedDeposit })
 

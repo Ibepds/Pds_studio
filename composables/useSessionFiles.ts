@@ -80,7 +80,7 @@ export const useSessionFiles = () => {
 
   const uploadForSession = async (sessionId: string, file: File) => {
     const { db, storage } = getClients()
-    if (!db || !storage) throw new Error('Firebase non initialisé')
+    if (!db || !storage) throw new Error('Application non prête. Rechargez la page.')
 
     loading.value = true
 

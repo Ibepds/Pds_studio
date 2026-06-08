@@ -2,6 +2,7 @@
 import { definePageMeta } from '#imports'
 import { onMounted, ref } from 'vue'
 import { useSessions } from '../../../composables/useSessions'
+import { useUsers } from '../../../composables/useUsers'
 import { firstDayOfMonthMonthsAgo } from '../../../utils/adminMonth'
 
 definePageMeta({
@@ -10,7 +11,9 @@ definePageMeta({
 })
 
 const { listAllFromDate } = useSessions()
+const { listByRole } = useUsers()
 const sessions = ref<any[]>([])
+const ingeList = ref<{ uid: string; email?: string | null }[]>([])
 const loading = ref(true)
 
 /** Assez large pour naviguer semaine par semaine (≈ 18 mois en arrière). */
@@ -19,7 +22,9 @@ const fromDate = firstDayOfMonthMonthsAgo(18)
 onMounted(async () => {
   loading.value = true
   try {
-    sessions.value = await listAllFromDate(fromDate)
+    const [s, i] = await Promise.all([listAllFromDate(fromDate), listByRole('inge')])
+    sessions.value = s
+    ingeList.value = i
   } finally {
     loading.value = false
   }
@@ -44,7 +49,7 @@ onMounted(async () => {
         Semaine
       </h2>
       <div class="min-w-0">
-        <WeekCalendar :sessions="sessions" />
+        <WeekCalendar :sessions="sessions" :inge-list="ingeList" />
       </div>
     </div>
   </AdminScreen>
