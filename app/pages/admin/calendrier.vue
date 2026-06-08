@@ -19,16 +19,28 @@ const loading = ref(true)
 /** Assez large pour naviguer semaine par semaine (≈ 18 mois en arrière). */
 const fromDate = firstDayOfMonthMonthsAgo(18)
 
+async function reload() {
+  const [s, i] = await Promise.all([listAllFromDate(fromDate), listByRole('inge')])
+  sessions.value = s
+  ingeList.value = i
+}
+
 onMounted(async () => {
   loading.value = true
   try {
-    const [s, i] = await Promise.all([listAllFromDate(fromDate), listByRole('inge')])
-    sessions.value = s
-    ingeList.value = i
+    await reload()
   } finally {
     loading.value = false
   }
 })
+
+async function handleSessionSaved() {
+  await reload()
+}
+
+async function handleSessionCancelled() {
+  await reload()
+}
 </script>
 
 <template>
@@ -49,7 +61,12 @@ onMounted(async () => {
         Semaine
       </h2>
       <div class="min-w-0">
-        <WeekCalendar :sessions="sessions" :inge-list="ingeList" />
+        <WeekCalendar
+          :sessions="sessions"
+          :inge-list="ingeList"
+          @session-saved="handleSessionSaved"
+          @session-cancelled="handleSessionCancelled"
+        />
       </div>
     </div>
   </AdminScreen>

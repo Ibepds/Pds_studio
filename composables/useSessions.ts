@@ -453,6 +453,18 @@ export const useSessions = () => {
     })
   }
 
+  /** Met à jour les champs libres d'une session (date, heures, ingéId). Admin uniquement. L'appelant doit rafraîchir sa liste. */
+  const updateSessionFields = async (
+    sessionId: string,
+    fields: { date?: string; startTime?: string; endTime?: string; ingeId?: string },
+  ) => {
+    const db = getDb()
+    if (!db) return
+    const clean = Object.fromEntries(Object.entries(fields).filter(([, v]) => v !== undefined))
+    if (Object.keys(clean).length === 0) return
+    await updateDoc(doc(db, 'sessions', sessionId), clean)
+  }
+
   /** Met à jour l'ingé son assigné à une session (admin). L'appelant doit rafraîchir sa liste. */
   const updateSessionInge = async (sessionId: string, ingeId: string) => {
     const db = getDb()
@@ -535,6 +547,7 @@ export const useSessions = () => {
     bookSession,
     updateSessionStatus,
     updateSessionRecapSent,
+    updateSessionFields,
     updateSessionInge,
     updateSessionRemainingToPay,
     listPastSessions,
