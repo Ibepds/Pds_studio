@@ -1,18 +1,13 @@
 /**
- * Crée un événement sur un Google Calendar quand une session est confirmée.
- * Utilise le client officiel Google APIs Node.js avec un Service Account (pas de refresh token).
+ * Met à jour un événement Google Calendar existant (date/heure/titre).
+ * Appelé quand l'admin modifie une session depuis la modal du calendrier.
  *
- * Config (au choix) :
- *   A) GOOGLE_APPLICATION_CREDENTIALS = chemin vers le fichier JSON du compte de service
- *   B) GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY (clé privée en base64 ou avec \n)
- *   + GOOGLE_CALENDAR_ID = ID de l’agenda (partagé avec l’email du compte de service)
- *
- * Dans Google Cloud : créer un compte de service, télécharger le JSON.
- * Dans Google Calendar : partager l’agenda cible avec l’email du compte de service (« Gérer les événements »).
+ * Body : { eventId, session: { date, startTime, endTime, bookerEmail?, style? } }
  */
 import { google } from 'googleapis'
 
-interface CalendarEventBody {
+interface PatchBody {
+  eventId: string
   session: {
     date: string
     startTime: string
@@ -49,28 +44,22 @@ export default defineEventHandler(async (event) => {
   const auth = getCalendarAuth(config)
 
   if (!auth) {
-    return {
-      ok: false,
-      skipped: true,
-      message:
-        'Google Calendar non configuré : définir GOOGLE_APPLICATION_CREDENTIALS ou GOOGLE_SERVICE_ACCOUNT_EMAIL + GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY',
-    }
+    return { ok: false, skipped: true, message: 'Google Calendar non configuré' }
   }
 
-  const body = (await readBody(event)) as CalendarEventBody
-  if (!body?.session?.date) {
-    throw createError({ statusCode: 400, message: 'session.date requise' })
+  const body = (await readBody(event)) as PatchBody
+  if (!body?.eventId || !body?.session?.date) {
+    throw createError({ statusCode: 400, message: 'eventId et session.date requis' })
   }
 
   const s = body.session
   const [startH, startM] = (s.startTime || '10:00').split(':').map(Number)
   const [endH, endM] = (s.endTime || '12:00').split(':').map(Number)
-  const dateStr = s.date
   const start = new Date(
-    `${dateStr}T${String(startH).padStart(2, '0')}:${String(startM || 0).padStart(2, '0')}:00`,
+    `${s.date}T${String(startH).padStart(2, '0')}:${String(startM || 0).padStart(2, '0')}:00`,
   )
   const end = new Date(
-    `${dateStr}T${String(endH).padStart(2, '0')}:${String(endM || 0).padStart(2, '0')}:00`,
+    `${s.date}T${String(endH).padStart(2, '0')}:${String(endM || 0).padStart(2, '0')}:00`,
   )
 
   const summary = `Session PDS ${s.bookerEmail ?? 'Booker'}`
@@ -80,9 +69,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     const calendar = google.calendar({ version: 'v3', auth })
-    console.log('calendar', calendar)
-    var res = await calendar.events.insert({
+    await calendar.events.patch({
       calendarId,
+      eventId: body.eventId,
       requestBody: {
         summary,
         description: description || undefined,
@@ -90,11 +79,9 @@ export default defineEventHandler(async (event) => {
         end: { dateTime: end.toISOString(), timeZone: 'Europe/Paris' },
       },
     })
-    console.log('calendar.events.insert done')
-    console.log('res', res)
-    return { ok: true, eventId: res.data.id ?? null }
+    return { ok: true }
   } catch (e) {
-    console.error('[google-calendar-event]', e)
-    throw createError({ statusCode: 500, message: 'Erreur création événement Google Calendar' })
+    console.error('[google-calendar-event PATCH]', e)
+    throw createError({ statusCode: 500, message: 'Erreur mise à jour événement Google Calendar' })
   }
 })

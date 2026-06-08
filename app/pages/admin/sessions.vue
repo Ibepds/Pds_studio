@@ -21,6 +21,7 @@ const {
   updateSessionStatus,
   updateSessionRecapSent,
   updateSessionInge,
+  saveCalendarEventId,
 } = useSessions()
 const { listByRole } = useUsers()
 const { label, range, prevMonth, nextMonth, year, month } = useAdminMonthNav()
@@ -156,7 +157,7 @@ async function confirmSession(s: Session) {
       console.error('Send recap', e)
     }
     try {
-      await $fetch('/api/google-calendar-event', {
+      const calRes = await $fetch<{ ok: boolean; eventId?: string | null }>('/api/google-calendar-event', {
         method: 'POST',
         body: {
           session: {
@@ -168,6 +169,9 @@ async function confirmSession(s: Session) {
           },
         },
       })
+      if (calRes?.eventId) {
+        await saveCalendarEventId(s.id, calRes.eventId)
+      }
     } catch (e) {
       console.error('Google Calendar', e)
     }

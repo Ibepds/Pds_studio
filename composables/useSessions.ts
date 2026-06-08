@@ -49,6 +49,8 @@ export interface Session {
   recapSentAt?: Date | null
   /** Montant restant à payer (€). Si défini, on l'affiche ; sinon on calcule totalPrice - depositAmount. Mettre à 0 quand tout est payé. */
   remainingToPay?: number | null
+  /** ID de l'événement Google Calendar associé (sauvegardé à la confirmation) */
+  googleCalendarEventId?: string | null
   /** Note sur 5 (avis studio après session) */
   reviewRating?: number | null
   /** Commentaire sur ce qui a été produit */
@@ -115,6 +117,7 @@ function parseSessionDoc(id: string, raw: Record<string, unknown>): Session {
       (raw.reviewSentAt as Date | undefined) ??
       null,
     reviewedBy: (raw.reviewedBy as string | undefined) ?? undefined,
+    googleCalendarEventId: (raw.googleCalendarEventId as string | undefined) ?? null,
     createdAt: (raw.createdAt as Timestamp | undefined)?.toDate?.() ?? new Date(),
   }
 }
@@ -453,6 +456,13 @@ export const useSessions = () => {
     })
   }
 
+  /** Sauvegarde l'ID de l'événement Google Calendar sur la session (après création). */
+  const saveCalendarEventId = async (sessionId: string, eventId: string) => {
+    const db = getDb()
+    if (!db) return
+    await updateDoc(doc(db, 'sessions', sessionId), { googleCalendarEventId: eventId })
+  }
+
   /** Met à jour les champs libres d'une session (date, heures, ingéId). Admin uniquement. L'appelant doit rafraîchir sa liste. */
   const updateSessionFields = async (
     sessionId: string,
@@ -547,6 +557,7 @@ export const useSessions = () => {
     bookSession,
     updateSessionStatus,
     updateSessionRecapSent,
+    saveCalendarEventId,
     updateSessionFields,
     updateSessionInge,
     updateSessionRemainingToPay,

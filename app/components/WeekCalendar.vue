@@ -34,7 +34,7 @@ const emit = defineEmits<{
   'session-cancelled': []
 }>()
 
-const { listSessionsForDate, updateSessionFields, updateSessionStatus } = useSessions()
+const { listSessionsForDate, updateSessionFields, updateSessionStatus, updateSessionRemainingToPay } = useSessions()
 const { getSlotsForUsersOnDate } = useAvailability()
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -153,6 +153,7 @@ function goToToday() {
 const selectedSession = ref<WeekCalendarSession | null>(null)
 const saving = ref(false)
 const cancelling = ref(false)
+const markingPaid = ref(false)
 const modalError = ref<string | null>(null)
 const availabilityWarning = ref<string | null>(null)
 
@@ -172,6 +173,11 @@ function closeModal() {
   selectedSession.value = null
   modalError.value = null
   availabilityWarning.value = null
+}
+
+function restToPay(s: WeekCalendarSession): number {
+  if (s.remainingToPay !== undefined && s.remainingToPay !== null) return Number(s.remainingToPay)
+  return Math.max(0, (s.totalPrice ?? 0) - (s.depositAmount ?? 0))
 }
 
 /** Vérifie disponibilités et retourne un message d'erreur ou null si OK. */
@@ -250,6 +256,28 @@ async function saveSession() {
       endTime: editForm.endTime,
       ...(editForm.ingeId ? { ingeId: editForm.ingeId } : {}),
     })
+
+    // Sync Google Calendar si un eventId est connu
+    if (s.googleCalendarEventId) {
+      try {
+        await $fetch('/api/google-calendar-event', {
+          method: 'PATCH',
+          body: {
+            eventId: s.googleCalendarEventId,
+            session: {
+              date: editForm.date,
+              startTime: editForm.startTime,
+              endTime: editForm.endTime,
+              bookerEmail: s.bookerEmail ?? null,
+              style: s.style,
+            },
+          },
+        })
+      } catch (e) {
+        console.warn('[WeekCalendar] Google Calendar PATCH échoué (non bloquant)', e)
+      }
+    }
+
     emit('session-saved')
     closeModal()
   } catch (e: any) {
@@ -267,12 +295,42 @@ async function cancelSession() {
   modalError.value = null
   try {
     await updateSessionStatus(s.id, 'cancelled')
+
+    // Supprimer l'événement Google Calendar si connu
+    if (s.googleCalendarEventId) {
+      try {
+        await $fetch('/api/google-calendar-event', {
+          method: 'DELETE',
+          body: { eventId: s.googleCalendarEventId },
+        })
+      } catch (e) {
+        console.warn('[WeekCalendar] Google Calendar DELETE échoué (non bloquant)', e)
+      }
+    }
+
     emit('session-cancelled')
     closeModal()
   } catch (e: any) {
     modalError.value = e?.message ?? "Erreur lors de l'annulation"
   } finally {
     cancelling.value = false
+  }
+}
+
+async function markFullyPaid() {
+  const s = selectedSession.value
+  if (!s || restToPay(s) === 0) return
+  markingPaid.value = true
+  modalError.value = null
+  try {
+    await updateSessionRemainingToPay(s.id, 0)
+    // Mise à jour locale pour que le bouton disparaisse immédiatement
+    s.remainingToPay = 0
+    emit('session-saved')
+  } catch (e: any) {
+    modalError.value = e?.message ?? 'Erreur lors de la mise à jour du paiement'
+  } finally {
+    markingPaid.value = false
   }
 }
 
@@ -501,6 +559,32 @@ const statusClass: Record<string, string> = {
                 <p v-else class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-sm text-white/50">
                   {{ resolveIngeName(selectedSession.ingeId) }}
                 </p>
+              </div>
+
+              <!-- Paiement -->
+              <div
+                v-if="selectedSession.status === 'confirmed' || selectedSession.status === 'done'"
+                class="flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3"
+              >
+                <div class="font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-sm">
+                  <p class="mb-0.5 text-[11px] uppercase tracking-[0.12em] text-white/45">Paiement</p>
+                  <p v-if="restToPay(selectedSession) === 0" class="font-medium text-emerald-400">
+                    Tout réglé ✓
+                  </p>
+                  <p v-else class="text-white/80">
+                    Reste à payer :
+                    <span class="font-semibold text-white">{{ restToPay(selectedSession) }} €</span>
+                  </p>
+                </div>
+                <button
+                  v-if="restToPay(selectedSession) > 0"
+                  type="button"
+                  class="shrink-0 rounded-full border border-emerald-500/50 px-3 py-1.5 font-[Helvetica_Neue,Helvetica,Arial,sans-serif] text-xs font-medium text-emerald-400 transition hover:bg-emerald-500/10 disabled:opacity-40"
+                  :disabled="markingPaid || saving || cancelling"
+                  @click="markFullyPaid"
+                >
+                  {{ markingPaid ? '…' : 'Marquer tout payé' }}
+                </button>
               </div>
 
               <!-- Client (lecture seule) -->
